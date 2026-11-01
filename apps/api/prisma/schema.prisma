@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  realName     String
+  idNumber     String
+  idCardImages String
+  status       String   @default("PENDING")
+  role         String   @default("USER")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Vote {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  creatorId    String
+  allowMultiple Boolean @default(false)
+  startAt      DateTime
+  endAt        DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  options      Option[]
+  ballots      Ballot[]
+}
+
+model Option {
+  id     String @id @default(cuid())
+  voteId String
+  vote   Vote   @relation(fields: [voteId], references: [id])
+  text   String
+  order  Int
+}
+
+model Ballot {
+  id             String   @id @default(cuid())
+  voteId         String
+  vote           Vote     @relation(fields: [voteId], references: [id])
+  pseudonym      String
+  optionIds      String
+  submittedAt    DateTime @default(now())
+  sequenceNumber Int
+
+  @@unique([voteId, sequenceNumber])
+}
