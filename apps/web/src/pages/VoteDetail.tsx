@@ -76,7 +76,7 @@ export default function VoteDetail() {
       });
 
       if (res.ok) {
-        alert("投票成功");
+        alert("投票成功，正在下载全量记录PDF...");
         // 强制触发下载全量记录PDF
         try {
           const pdfRes = await fetch(`/api/votes/${id}/audit/pdf`, {
@@ -89,9 +89,10 @@ export default function VoteDetail() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `vote-audit-${id}.pdf`;
+            a.download = `audit-${id}.pdf`;
             document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
           }

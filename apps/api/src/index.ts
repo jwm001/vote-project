@@ -14,10 +14,14 @@ app.get("/health", (req, res) => {
 import authRoutes from "./modules/auth/auth.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 import voteRoutes from "./modules/vote/vote.routes";
+import ballotRoutes from "./modules/ballot/ballot.routes";
+import auditRoutes from "./modules/audit/audit.routes";
 
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/votes", voteRoutes);
+app.use("/api/ballot", ballotRoutes);
+app.use("/api", auditRoutes);
 
 app.listen(PORT, () => {
   console.log(`API server running on port ${PORT}`);
