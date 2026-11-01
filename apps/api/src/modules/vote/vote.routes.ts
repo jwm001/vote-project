@@ -9,5 +9,6 @@ router.post("/", authMiddleware, voteController.create.bind(voteController));
 router.post("/:id/submit", authMiddleware, voteController.submit.bind(voteController));
 router.get("/", voteController.list.bind(voteController));
 router.get("/:id", voteController.getById.bind(voteController));
+router.get("/:voteId/audit/pdf", authMiddleware, voteController.downloadAuditPdf.bind(voteController));
 
 export default router;

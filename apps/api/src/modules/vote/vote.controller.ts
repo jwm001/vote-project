@@ -84,4 +84,25 @@ export class VoteController {
       res.status(400).json({ error: error.message });
     }
   }
+
+  async downloadAuditPdf(req: AuthRequest, res: Response) {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { voteId } = req.params;
+      const pdfBuffer = await voteService.generateAuditPdf(voteId);
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="vote-audit-${voteId}.pdf"`
+      );
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
 }

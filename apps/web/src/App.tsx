@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import AdminReview from "./pages/AdminReview";
 import CreateVote from "./pages/CreateVote";
 import VoteList from "./pages/VoteList";
+import VoteDetail from "./pages/VoteDetail";
 
 function Home() {
   return (
@@ -29,6 +30,7 @@ function App() {
         <Route path="/admin/review" element={<AdminReview />} />
         <Route path="/votes" element={<VoteList />} />
         <Route path="/vote/create" element={<CreateVote />} />
+        <Route path="/vote/:id" element={<VoteDetail />} />
       </Routes>
     </BrowserRouter>
   );

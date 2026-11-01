@@ -1,4 +1,5 @@
 import { prisma } from "../../utils/prisma";
+import PDFDocument from "pdfkit";
 
 function generatePseudonym() {
   const timestamp = Date.now();
@@ -113,5 +114,75 @@ export class VoteService {
     });
 
     return result;
+  }
+
+  async generateAuditPdf(voteId: string) {
+    const vote = await prisma.vote.findUnique({
+      where: { id: voteId },
+      include: {
+        options: true,
+      },
+    });
+
+    if (!vote) {
+      throw new Error("Vote not found");
+    }
+
+    const ballots = await prisma.ballot.findMany({
+      where: { voteId },
+      orderBy: { sequenceNumber: "asc" },
+    });
+
+    const optionMap = new Map(vote.options.map((opt) => [opt.id, opt.text]));
+
+    const doc = new PDFDocument({ margin: 50 });
+    const buffers: Buffer[] = [];
+
+    doc.on("data", (chunk) => buffers.push(chunk));
+
+    return new Promise<Buffer>((resolve) => {
+      doc.on("end", () => {
+        resolve(Buffer.concat(buffers));
+      });
+
+      doc.fontSize(20).text("投票全量记录（Audit Log）", { align: "center" });
+      doc.moveDown();
+
+      doc.fontSize(12).text(`投票场名称：${vote.title}`);
+      doc.text(`创建者：${vote.creatorId}`);
+      doc.text(`开始时间：${vote.startAt.toISOString()}`);
+      doc.text(`结束时间：${vote.endAt.toISOString()}`);
+      doc.moveDown();
+
+      doc.text("选项列表：");
+      for (const opt of vote.options.sort((a, b) => a.order - b.order)) {
+        doc.text(`  ${opt.order + 1}. ${opt.text}`);
+      }
+      doc.moveDown();
+
+      doc.text("投票记录（按提交序号排序）：");
+      doc.moveDown();
+
+      for (const ballot of ballots) {
+        let optionIds: string[] = [];
+        try {
+          optionIds = JSON.parse(ballot.optionIds);
+        } catch {
+          optionIds = [];
+        }
+        const optionTexts = optionIds
+          .map((id) => optionMap.get(id))
+          .filter((t): t is string => Boolean(t))
+          .join(", ");
+
+        doc.fontSize(10).text(`序号：${ballot.sequenceNumber}`);
+        doc.text(`假名：${ballot.pseudonym}`);
+        doc.text(`投票时间：${ballot.submittedAt.toISOString()}`);
+        doc.text(`选项：${optionTexts || "-"}`);
+        doc.moveDown();
+      }
+
+      doc.end();
+    });
   }
 }
