@@ -47,3 +47,9 @@ export interface Ballot {
   submittedAt: Date;
   sequenceNumber: number;
 }
+
+export interface UserVoteHistory {
+  id: string;
+  userId: string;
+  voteId: string;
+}

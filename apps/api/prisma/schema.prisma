@@ -16,6 +16,7 @@ model User {
   role         String   @default("USER")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  userVoteHistories UserVoteHistory[]
 }
 
 model Vote {
@@ -30,6 +31,7 @@ model Vote {
   updatedAt    DateTime @updatedAt
   options      Option[]
   ballots      Ballot[]
+  userVoteHistories UserVoteHistory[]
 }
 
 model Option {
@@ -50,4 +52,14 @@ model Ballot {
   sequenceNumber Int
 
   @@unique([voteId, sequenceNumber])
+}
+
+model UserVoteHistory {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  voteId String
+  vote   Vote   @relation(fields: [voteId], references: [id])
+
+  @@unique([userId, voteId])
 }

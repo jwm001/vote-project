@@ -1,7 +1,6 @@
 import { Response } from "express";
 import { VoteService } from "./vote.service";
 import { AuthRequest } from "../../middleware/auth.middleware";
-import { prisma } from "../../utils/prisma";
 
 const voteService = new VoteService();
 
@@ -55,6 +54,32 @@ export class VoteController {
         return res.status(404).json({ error: "Vote not found" });
       }
       res.json({ vote });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  async submit(req: AuthRequest, res: Response) {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { id } = req.params;
+      const { optionIds } = req.body;
+
+      if (!optionIds || !Array.isArray(optionIds) || optionIds.length === 0) {
+        return res.status(400).json({ error: "Missing optionIds" });
+      }
+
+      const result = await voteService.submitVote({
+        userId: user.id,
+        voteId: id,
+        optionIds,
+      });
+
+      res.status(201).json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
