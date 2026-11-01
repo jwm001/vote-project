@@ -14,3 +14,7 @@ app.get("/health", (req, res) => {
 app.listen(PORT, () => {
   console.log(`API server running on port ${PORT}`);
 });
+
+import authRoutes from "./modules/auth/auth.routes";
+
+app.use("/api/auth", authRoutes);
