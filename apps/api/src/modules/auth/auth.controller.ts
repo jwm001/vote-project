@@ -36,6 +36,12 @@ export class AuthController {
   }
 
   async me(req: AuthRequest, res: Response) {
-    res.json({ user: req.user });
+    const user = req.user;
+    if (user) {
+      const { password, ...safeUser } = user as any;
+      res.json({ user: safeUser });
+    } else {
+      res.json({ user: user });
+    }
   }
 }

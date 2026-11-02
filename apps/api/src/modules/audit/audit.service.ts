@@ -52,8 +52,14 @@ export const auditService = {
         const newPage = pdfDoc.addPage();
         y = newPage.getSize().height - 50;
       }
-      const optionTexts = ballot.optionIds
-        .map(id => vote.options.find(o => o.id === id)?.text || id)
+      let optionIds: string[] = [];
+      try {
+        optionIds = JSON.parse(ballot.optionIds as any);
+      } catch {
+        optionIds = Array.isArray(ballot.optionIds) ? ballot.optionIds : [];
+      }
+      const optionTexts = optionIds
+        .map((id: string) => vote.options.find((o: any) => o.id === id)?.text || id)
         .join(', ');
       const line = `${ballot.sequenceNumber} | ${ballot.pseudonym} | ${ballot.submittedAt.toISOString()} | ${optionTexts}`;
       page.drawText(line.substring(0, 80), { x: 50, y, size: 8, font });

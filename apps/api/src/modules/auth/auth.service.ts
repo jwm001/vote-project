@@ -1,6 +1,7 @@
 import { prisma } from "../../utils/prisma";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { encrypt } from "../../utils/encryption";
 
 export class AuthService {
   async register(data: {
@@ -17,8 +18,8 @@ export class AuthService {
 
     const user = await prisma.user.create({
       data: {
-        realName,
-        idNumber,
+        realName: encrypt(realName),
+        idNumber: encrypt(idNumber),
         idCardImages: JSON.stringify(idCardImages),
         status: "PENDING",
         role: "USER",
