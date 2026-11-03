@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 
 const prisma = new PrismaClient();
 
@@ -19,32 +19,60 @@ export const auditService = {
 
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage();
-    const { width, height } = page.getSize();
+    const { height } = page.getSize();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontSize = 10;
 
     let y = height - 50;
 
-    page.drawText(`投票场名称: ${vote.title}`, { x: 50, y, size: fontSize, font });
+    const clean = (text: string) => String(text).replace(/[^\x20-\x7E]/g, '?');
+
+    page.drawText(clean(`Vote: ${vote.title}`), { x: 50, y, size: fontSize, font });
     y -= 20;
-    page.drawText(`创建者: ${vote.creatorId}`, { x: 50, y, size: fontSize, font });
+    page.drawText(clean(`Creator: ${vote.creatorId}`), { x: 50, y, size: fontSize, font });
     y -= 20;
-    page.drawText(`开始时间: ${vote.startAt.toISOString()}`, { x: 50, y, size: fontSize, font });
+    page.drawText(clean(`Start: ${vote.startAt.toISOString()}`), { x: 50, y, size: fontSize, font });
     y -= 20;
-    page.drawText(`结束时间: ${vote.endAt.toISOString()}`, { x: 50, y, size: fontSize, font });
+    page.drawText(clean(`End: ${vote.endAt.toISOString()}`), { x: 50, y, size: fontSize, font });
     y -= 30;
 
-    page.drawText('选项列表:', { x: 50, y, size: fontSize, font });
+    page.drawText('Options:', { x: 50, y, size: fontSize, font });
     y -= 15;
     for (const option of vote.options) {
-      page.drawText(`  ${option.order}. ${option.text}`, { x: 50, y, size: fontSize, font });
+      page.drawText(clean(`  ${option.order + 1}. ${option.text}`), { x: 50, y, size: fontSize, font });
       y -= 15;
     }
     y -= 20;
 
-    page.drawText('投票记录:', { x: 50, y, size: fontSize, font });
+    // 投票总结
+    y -= 10;
+    page.drawText('Summary:', { x: 50, y, size: fontSize, font });
     y -= 15;
-    page.drawText('序号 | 假名 | 投票时间 | 选项', { x: 50, y, size: fontSize, font });
+    const totalVotes = sortedBallots.length;
+    page.drawText(clean(`Total votes: ${totalVotes}`), { x: 50, y, size: fontSize, font });
+    y -= 15;
+    const optionCounts: Record<string, number> = {};
+    vote.options.forEach((opt: any) => { optionCounts[opt.id] = 0; });
+    for (const ballot of sortedBallots) {
+      let optionIds: string[] = [];
+      try {
+        optionIds = JSON.parse(ballot.optionIds as any);
+      } catch {
+        optionIds = Array.isArray(ballot.optionIds) ? ballot.optionIds : [];
+      }
+      optionIds.forEach((id: string) => {
+        if (optionCounts[id] !== undefined) optionCounts[id]++;
+      });
+    }
+    for (const option of vote.options) {
+      page.drawText(clean(`  ${option.text}: ${optionCounts[option.id] || 0} votes`), { x: 50, y, size: fontSize, font });
+      y -= 12;
+    }
+    y -= 20;
+
+    page.drawText('Records:', { x: 50, y, size: fontSize, font });
+    y -= 15;
+    page.drawText('Seq | Pseudonym | Time | Options', { x: 50, y, size: fontSize, font });
     y -= 15;
 
     for (const ballot of sortedBallots) {
@@ -59,10 +87,13 @@ export const auditService = {
         optionIds = Array.isArray(ballot.optionIds) ? ballot.optionIds : [];
       }
       const optionTexts = optionIds
-        .map((id: string) => vote.options.find((o: any) => o.id === id)?.text || id)
+        .map((id: string) => {
+          const opt = vote.options.find((o: any) => o.id === id);
+          return opt ? opt.text : id;
+        })
         .join(', ');
       const line = `${ballot.sequenceNumber} | ${ballot.pseudonym} | ${ballot.submittedAt.toISOString()} | ${optionTexts}`;
-      page.drawText(line.substring(0, 80), { x: 50, y, size: 8, font });
+      page.drawText(clean(line).substring(0, 90), { x: 50, y, size: 8, font });
       y -= 12;
     }
 

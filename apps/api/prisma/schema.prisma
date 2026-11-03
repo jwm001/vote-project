@@ -9,6 +9,8 @@ datasource db {
 
 model User {
   id           String   @id @default(cuid())
+  username     String   @unique
+  password     String   @default("")
   realName     String
   idNumber     String
   idCardImages String
@@ -55,11 +57,13 @@ model Ballot {
 }
 
 model UserVoteHistory {
-  id     String @id @default(cuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-  voteId String
-  vote   Vote   @relation(fields: [voteId], references: [id])
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+  voteId             String
+  vote               Vote     @relation(fields: [voteId], references: [id])
+  ballotSequenceNumber Int     @default(0)
+  votedAt            DateTime @default(now())
 
   @@unique([userId, voteId])
 }

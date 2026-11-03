@@ -105,4 +105,26 @@ export class VoteController {
       res.status(400).json({ error: error.message });
     }
   }
+
+  async hasVoted(req: AuthRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      const result = await voteService.hasUserVoted(userId, id);
+      const history = result ? await voteService.getUserVoteHistory(userId, id) : null;
+      res.json({ hasVoted: result, history });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  async myVotes(req: AuthRequest, res: Response) {
+    try {
+      const userId = req.user!.id;
+      const votes = await voteService.getMyVotes(userId);
+      res.json({ votes });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
 }

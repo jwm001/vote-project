@@ -185,4 +185,50 @@ export class VoteService {
       doc.end();
     });
   }
+
+  async hasUserVoted(userId: string, voteId: string): Promise<boolean> {
+    const history = await prisma.userVoteHistory.findUnique({
+      where: { userId_voteId: { userId, voteId } },
+    });
+    return !!history;
+  }
+
+  async getUserVoteHistory(userId: string, voteId: string) {
+    const history = await prisma.userVoteHistory.findUnique({
+      where: { userId_voteId: { userId, voteId } },
+    });
+    if (!history) return null;
+    // 找到对应的 ballot
+    const ballot = await prisma.ballot.findFirst({
+      where: { voteId, sequenceNumber: history.ballotSequenceNumber },
+    });
+    return {
+      voteId,
+      pseudonym: ballot?.pseudonym,
+      submittedAt: ballot?.submittedAt,
+      sequenceNumber: history.ballotSequenceNumber,
+    };
+  }
+
+  async getMyVotes(userId: string) {
+    const histories = await prisma.userVoteHistory.findMany({
+      where: { userId },
+      orderBy: { votedAt: 'desc' },
+    });
+    const result = [];
+    for (const h of histories) {
+      const vote = await prisma.vote.findUnique({ where: { id: h.voteId } });
+      const ballot = await prisma.ballot.findFirst({
+        where: { voteId: h.voteId, sequenceNumber: h.ballotSequenceNumber },
+      });
+      result.push({
+        voteId: h.voteId,
+        voteTitle: vote?.title,
+        pseudonym: ballot?.pseudonym,
+        submittedAt: ballot?.submittedAt,
+        sequenceNumber: h.ballotSequenceNumber,
+      });
+    }
+    return result;
+  }
 }
