@@ -1,11 +1,50 @@
 import { prisma } from "../../utils/prisma";
-import PDFDocument from "pdfkit";
+import { AppError } from "../../utils/errors";
 
 function generatePseudonym() {
   const timestamp = Date.now();
   const random = Math.random().toString(36).substring(2, 8);
   return `user_${timestamp}_${random}`;
 }
+
+const MAX_SEQUENCE_RETRIES = 5;
+const MAX_OPTION_LENGTH = 300;
+const MAX_OPTIONS = 50;
+
+function isUniqueConstraintError(error: any): boolean {
+  return error?.code === "P2002";
+}
+
+function uniqueTarget(error: any): string {
+  const target = error?.meta?.target;
+  if (Array.isArray(target)) return target.join(",");
+  return String(target ?? "");
+}
+
+function isSequenceConflict(error: any): boolean {
+  if (!isUniqueConstraintError(error)) return false;
+  const target = uniqueTarget(error);
+  return target.includes("sequenceNumber") || target.includes("sequence");
+}
+
+function isDuplicateVote(error: any): boolean {
+  if (!isUniqueConstraintError(error)) return false;
+  const target = uniqueTarget(error);
+  return (
+    target.includes("UserVoteHistory") ||
+    target.includes("userId") ||
+    target.includes("voteId")
+  );
+}
+
+function isTransientWriteConflict(error: any): boolean {
+  return (
+    error?.code === "P2034" ||
+    /database is locked|SQLITE_BUSY/i.test(String(error?.message ?? ""))
+  );
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class VoteService {
   async createVote(data: {
@@ -17,16 +56,48 @@ export class VoteService {
     endAt: Date;
     options: string[];
   }) {
+    const title = (data.title || "").trim();
+    if (!title) {
+      throw new AppError("请填写投票标题", 400);
+    }
+
+    if (Number.isNaN(data.startAt.getTime()) || Number.isNaN(data.endAt.getTime())) {
+      throw new AppError("投票时间格式不正确", 400);
+    }
+    if (data.endAt.getTime() <= data.startAt.getTime()) {
+      throw new AppError("结束时间必须晚于开始时间", 400);
+    }
+
+    if (!Array.isArray(data.options)) {
+      throw new AppError("请至少提供一个选项", 400);
+    }
+    const options = data.options.map((text) => String(text ?? "").trim());
+    if (options.length === 0) {
+      throw new AppError("请至少提供一个选项", 400);
+    }
+    if (options.length > MAX_OPTIONS) {
+      throw new AppError(`选项不能超过 ${MAX_OPTIONS} 个`, 400);
+    }
+    if (options.some((text) => !text)) {
+      throw new AppError("选项内容不能为空", 400);
+    }
+    if (options.some((text) => text.length > MAX_OPTION_LENGTH)) {
+      throw new AppError(`单个选项不能超过 ${MAX_OPTION_LENGTH} 个字符`, 400);
+    }
+    if (new Set(options).size !== options.length) {
+      throw new AppError("选项内容不能重复", 400);
+    }
+
     const vote = await prisma.vote.create({
       data: {
-        title: data.title,
+        title,
         description: data.description,
         creatorId: data.creatorId,
         allowMultiple: data.allowMultiple,
         startAt: data.startAt,
         endAt: data.endAt,
         options: {
-          create: data.options.map((text, index) => ({
+          create: options.map((text, index) => ({
             text,
             order: index,
           })),
@@ -66,10 +137,39 @@ export class VoteService {
     });
 
     if (!vote) {
-      throw new Error("Vote not found");
+      throw new AppError("Vote not found", 404);
     }
 
-    // Check if user has already voted
+    const now = new Date();
+    if (now < vote.startAt) {
+      throw new AppError("投票尚未开始", 409);
+    }
+    if (now > vote.endAt) {
+      throw new AppError("投票已结束", 409);
+    }
+
+    // ---- 选项校验：归属、单选、去重 ----
+    const rawOptionIds = Array.isArray(data.optionIds) ? data.optionIds : [];
+    const optionIds = rawOptionIds.map((id) => String(id));
+
+    if (optionIds.length === 0) {
+      throw new AppError("请至少选择一个选项", 400);
+    }
+    if (new Set(optionIds).size !== optionIds.length) {
+      throw new AppError("不能重复选择同一个选项", 400);
+    }
+
+    const ownOptionIds = new Set(vote.options.map((option) => option.id));
+    const foreign = optionIds.filter((id) => !ownOptionIds.has(id));
+    if (foreign.length > 0) {
+      throw new AppError("存在不属于本场投票的选项", 400);
+    }
+
+    if (!vote.allowMultiple && optionIds.length !== 1) {
+      throw new AppError("本场投票为单选，只能选择一个选项", 400);
+    }
+
+    // ---- 限投一次 ----
     const existingHistory = await prisma.userVoteHistory.findUnique({
       where: {
         userId_voteId: {
@@ -80,110 +180,63 @@ export class VoteService {
     });
 
     if (existingHistory) {
-      throw new Error("Already voted");
+      throw new AppError("你已参与过本场投票", 409);
     }
-
-    // Get the next sequence number for this vote
-    const lastBallot = await prisma.ballot.findFirst({
-      where: { voteId: data.voteId },
-      orderBy: { sequenceNumber: "desc" },
-    });
-    const sequenceNumber = lastBallot ? lastBallot.sequenceNumber + 1 : 1;
 
     const pseudonym = generatePseudonym();
+    const payload = JSON.stringify(optionIds);
 
-    // Create ballot and user vote history in a transaction
-    const result = await prisma.$transaction(async (tx) => {
-      const ballot = await tx.ballot.create({
-        data: {
-          voteId: data.voteId,
-          pseudonym,
-          optionIds: JSON.stringify(data.optionIds),
-          sequenceNumber,
-        },
-      });
+    // 序号必须在事务内分配：并发提交时靠 (voteId, sequenceNumber) 唯一索引兜底，
+    // 命中冲突就重试，而不是在事务外「查最后一条 +1」。
+    for (let attempt = 0; attempt < MAX_SEQUENCE_RETRIES; attempt++) {
+      try {
+        return await prisma.$transaction(async (tx) => {
+          const lastBallot = await tx.ballot.findFirst({
+            where: { voteId: data.voteId },
+            orderBy: { sequenceNumber: "desc" },
+            select: { sequenceNumber: true },
+          });
+          const sequenceNumber = (lastBallot?.sequenceNumber ?? 0) + 1;
 
-      await tx.userVoteHistory.create({
-        data: {
-          userId: data.userId,
-          voteId: data.voteId,
-        },
-      });
+          const ballot = await tx.ballot.create({
+            data: {
+              voteId: data.voteId,
+              pseudonym,
+              optionIds: payload,
+              sequenceNumber,
+            },
+          });
 
-      return ballot;
-    });
+          await tx.userVoteHistory.create({
+            data: {
+              userId: data.userId,
+              voteId: data.voteId,
+              ballotSequenceNumber: sequenceNumber,
+            },
+          });
 
-    return result;
-  }
-
-  async generateAuditPdf(voteId: string) {
-    const vote = await prisma.vote.findUnique({
-      where: { id: voteId },
-      include: {
-        options: true,
-      },
-    });
-
-    if (!vote) {
-      throw new Error("Vote not found");
+          return {
+            ballot,
+            pseudonym,
+            sequenceNumber,
+          };
+        });
+      } catch (error: any) {
+        if (isDuplicateVote(error) && !isSequenceConflict(error)) {
+          throw new AppError("你已参与过本场投票", 409);
+        }
+        if (isSequenceConflict(error) || isTransientWriteConflict(error)) {
+          if (attempt < MAX_SEQUENCE_RETRIES - 1) {
+            await sleep(20 * (attempt + 1) + Math.floor(Math.random() * 20));
+            continue;
+          }
+          throw new AppError("投票提交冲突，请重试", 409);
+        }
+        throw error;
+      }
     }
 
-    const ballots = await prisma.ballot.findMany({
-      where: { voteId },
-      orderBy: { sequenceNumber: "asc" },
-    });
-
-    const optionMap = new Map(vote.options.map((opt) => [opt.id, opt.text]));
-
-    const doc = new PDFDocument({ margin: 50 });
-    const buffers: Buffer[] = [];
-
-    doc.on("data", (chunk) => buffers.push(chunk));
-
-    return new Promise<Buffer>((resolve) => {
-      doc.on("end", () => {
-        resolve(Buffer.concat(buffers));
-      });
-
-      doc.fontSize(20).text("投票全量记录（Audit Log）", { align: "center" });
-      doc.moveDown();
-
-      doc.fontSize(12).text(`投票场名称：${vote.title}`);
-      doc.text(`创建者：${vote.creatorId}`);
-      doc.text(`开始时间：${vote.startAt.toISOString()}`);
-      doc.text(`结束时间：${vote.endAt.toISOString()}`);
-      doc.moveDown();
-
-      doc.text("选项列表：");
-      for (const opt of vote.options.sort((a, b) => a.order - b.order)) {
-        doc.text(`  ${opt.order + 1}. ${opt.text}`);
-      }
-      doc.moveDown();
-
-      doc.text("投票记录（按提交序号排序）：");
-      doc.moveDown();
-
-      for (const ballot of ballots) {
-        let optionIds: string[] = [];
-        try {
-          optionIds = JSON.parse(ballot.optionIds);
-        } catch {
-          optionIds = [];
-        }
-        const optionTexts = optionIds
-          .map((id) => optionMap.get(id))
-          .filter((t): t is string => Boolean(t))
-          .join(", ");
-
-        doc.fontSize(10).text(`序号：${ballot.sequenceNumber}`);
-        doc.text(`假名：${ballot.pseudonym}`);
-        doc.text(`投票时间：${ballot.submittedAt.toISOString()}`);
-        doc.text(`选项：${optionTexts || "-"}`);
-        doc.moveDown();
-      }
-
-      doc.end();
-    });
+    throw new AppError("投票提交冲突，请重试", 409);
   }
 
   async hasUserVoted(userId: string, voteId: string): Promise<boolean> {

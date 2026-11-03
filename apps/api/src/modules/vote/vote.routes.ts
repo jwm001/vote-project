@@ -12,6 +12,5 @@ router.get("/", voteController.list.bind(voteController));
 router.get("/my/votes", authMiddleware, voteController.myVotes.bind(voteController));
 router.get("/:id/has-voted", authMiddleware, voteController.hasVoted.bind(voteController));
 router.get("/:id", voteController.getById.bind(voteController));
-router.get("/:voteId/audit/pdf", authMiddleware, voteController.downloadAuditPdf.bind(voteController));
 
 export default router;

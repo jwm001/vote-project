@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { VoteService } from "./vote.service";
 import { AuthRequest } from "../../middleware/auth.middleware";
+import { messageOf, statusCodeOf } from "../../utils/errors";
 
 const voteService = new VoteService();
 
@@ -33,7 +34,7 @@ export class VoteController {
 
       res.status(201).json({ vote });
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
   }
 
@@ -42,7 +43,7 @@ export class VoteController {
       const votes = await voteService.getVotes();
       res.json({ votes });
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
   }
 
@@ -55,7 +56,7 @@ export class VoteController {
       }
       res.json({ vote });
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
   }
 
@@ -81,28 +82,7 @@ export class VoteController {
 
       res.status(201).json(result);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  }
-
-  async downloadAuditPdf(req: AuthRequest, res: Response) {
-    try {
-      const user = req.user;
-      if (!user) {
-        return res.status(401).json({ error: "Unauthorized" });
-      }
-
-      const { voteId } = req.params;
-      const pdfBuffer = await voteService.generateAuditPdf(voteId);
-
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="vote-audit-${voteId}.pdf"`
-      );
-      res.send(pdfBuffer);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
   }
 
@@ -114,7 +94,7 @@ export class VoteController {
       const history = result ? await voteService.getUserVoteHistory(userId, id) : null;
       res.json({ hasVoted: result, history });
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
   }
 
@@ -124,7 +104,7 @@ export class VoteController {
       const votes = await voteService.getMyVotes(userId);
       res.json({ votes });
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
   }
 }
