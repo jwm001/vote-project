@@ -52,7 +52,7 @@ export default function Home() {
         }}>
           <div style={{ fontSize: '1.6rem', marginBottom: '0.5rem' }}>🎭</div>
           <h3 style={{ color: '#667eea', marginBottom: '0.4rem', fontSize: '1rem' }}>投票匿名</h3>
-          <p style={{ color: '#555', fontSize: '0.8rem', lineHeight: '1.5' }}>每次投票生成新假名，身份完全隔离</p>
+          <p style={{ color: '#555', fontSize: '0.8rem', lineHeight: '1.5' }}>每次投票生成新假名，记录与 PDF 中不含实名信息</p>
         </div>
         <div style={{ 
           padding: '1.2rem', 
@@ -62,7 +62,7 @@ export default function Home() {
         }}>
           <div style={{ fontSize: '1.6rem', marginBottom: '0.5rem' }}>📄</div>
           <h3 style={{ color: '#667eea', marginBottom: '0.4rem', fontSize: '1rem' }}>全量可审计</h3>
-          <p style={{ color: '#555', fontSize: '0.8rem', lineHeight: '1.5' }}>强制下载PDF全量记录，不可篡改</p>
+          <p style={{ color: '#555', fontSize: '0.8rem', lineHeight: '1.5' }}>投票后强制下载全量记录，可校验是否被改动</p>
         </div>
       </div>
       <div style={{ display: 'flex', gap: '0.8rem', justifyContent: 'center', flexWrap: 'wrap' }}>

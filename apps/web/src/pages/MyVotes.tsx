@@ -153,7 +153,7 @@ export default function MyVotes() {
           <h1 className="mv-title">我的投票记录</h1>
           <p className="mv-sub">
             {state === 'ready' && !needLogin
-              ? `共 ${votes.length} 场 · 投票身份完全匿名`
+              ? `共 ${votes.length} 场 · 记录中不含实名信息`
               : '准入实名 · 投票匿名 · 全量可审计'}
           </p>
         </div>
