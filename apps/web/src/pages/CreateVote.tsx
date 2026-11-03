@@ -1,120 +1,453 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import './CreateVote.css';
 
-export default function CreateVote() {
-  const [form, setForm] = useState({
+interface FormState {
+  title: string;
+  description: string;
+  allowMultiple: boolean;
+  startAt: string;
+  endAt: string;
+  options: string[];
+}
+
+type FieldKey = 'title' | 'startAt' | 'endAt' | 'options';
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+function toLocalInput(date: Date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function createInitialForm(): FormState {
+  const start = new Date();
+  const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return {
     title: '',
     description: '',
     allowMultiple: false,
-    startAt: '',
-    endAt: '',
-    options: ['', '']
-  });
-  const [error, setError] = useState('');
+    startAt: toLocalInput(start),
+    endAt: toLocalInput(end),
+    options: ['', ''],
+  };
+}
+
+function formatRange(startAt: string, endAt: string) {
+  const parse = (value: string) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+  const format = (date: Date) =>
+    date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+  const start = parse(startAt);
+  const end = parse(endAt);
+  if (start && end) return `${format(start)} — ${format(end)}`;
+  if (start) return `${format(start)} 起`;
+  if (end) return `截至 ${format(end)}`;
+  return '尚未设置时间';
+}
+
+export default function CreateVote() {
+  const [form, setForm] = useState<FormState>(createInitialForm);
+  const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState('');
   const navigate = useNavigate();
 
+  const filledOptions = useMemo(
+    () => form.options.map(option => option.trim()).filter(Boolean),
+    [form.options]
+  );
+  const previewOptions = filledOptions.length > 0 ? filledOptions : ['选项 1', '选项 2'];
+
+  const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const clearError = (key: FieldKey) => {
+    setErrors(prev => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const setOption = (index: number, value: string) => {
+    setForm(prev => {
+      const options = [...prev.options];
+      options[index] = value;
+      return { ...prev, options };
+    });
+    clearError('options');
+  };
+
   const addOption = () => {
-    setForm({...form, options: [...form.options, '']});
+    setForm(prev => ({ ...prev, options: [...prev.options, ''] }));
+    clearError('options');
   };
 
   const removeOption = (index: number) => {
-    if (form.options.length > 2) {
-      setForm({...form, options: form.options.filter((_, i) => i !== index)});
+    setForm(prev =>
+      prev.options.length > 2
+        ? { ...prev, options: prev.options.filter((_, i) => i !== index) }
+        : prev
+    );
+    clearError('options');
+  };
+
+  const moveOption = (index: number, direction: -1 | 1) => {
+    setForm(prev => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.options.length) return prev;
+      const options = [...prev.options];
+      [options[index], options[target]] = [options[target], options[index]];
+      return { ...prev, options };
+    });
+    clearError('options');
+  };
+
+  const handleOptionKeyDown = (event: KeyboardEvent<HTMLInputElement>, index: number) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    if (index === form.options.length - 1) {
+      addOption();
+      requestAnimationFrame(() => document.getElementById(`cv-option-${index + 1}`)?.focus());
+    } else {
+      document.getElementById(`cv-option-${index + 1}`)?.focus();
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const validate = () => {
+    const next: Partial<Record<FieldKey, string>> = {};
+    if (!form.title.trim()) next.title = '请填写投票标题';
+    if (!form.startAt) next.startAt = '请选择开始时间';
+    if (!form.endAt) next.endAt = '请选择结束时间';
+    if (form.startAt && form.endAt && new Date(form.endAt) <= new Date(form.startAt)) {
+      next.endAt = '结束时间必须晚于开始时间';
+    }
+    if (filledOptions.length < 2) {
+      next.options = '至少需要填写 2 个选项';
+    } else if (new Set(filledOptions).size !== filledOptions.length) {
+      next.options = '选项内容不能重复';
+    }
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setServerError('');
+    if (submitting) return;
+
     const token = localStorage.getItem('token');
     if (!token) {
       navigate('/login');
       return;
     }
-    const options = form.options.filter(o => o.trim());
-    if (options.length < 2) {
-      setError('至少需要2个选项');
-      return;
-    }
+    if (!validate()) return;
+
+    setSubmitting(true);
     try {
       const res = await fetch('/api/votes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...form, options })
+        body: JSON.stringify({
+          title: form.title.trim(),
+          description: form.description.trim(),
+          allowMultiple: form.allowMultiple,
+          startAt: new Date(form.startAt).toISOString(),
+          endAt: new Date(form.endAt).toISOString(),
+          options: filledOptions,
+        }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         navigate(`/vote/${data.vote.id}`);
-      } else {
-        setError(data.error || '创建失败');
+        return;
       }
-    } catch (err) {
-      setError('创建失败');
+      setServerError(data.error || '创建失败，请稍后重试');
+    } catch {
+      setServerError('网络异常，创建失败，请稍后重试');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div style={{
-      background: 'white',
-      borderRadius: '14px',
-      padding: '1.6rem 1.4rem',
-      boxShadow: '0 15px 50px rgba(0, 0, 0, 0.25)',
-      maxWidth: '650px',
-      margin: '0.8rem auto',
-      border: '1px solid rgba(255, 255, 255, 0.2)'
-    }}>
-      <div style={{ textAlign: 'center', marginBottom: '1.3rem' }}>
-        <div style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>📝</div>
-        <h2 style={{ fontSize: '1.4rem', fontWeight: '700' }}>创建新投票</h2>
-        <p style={{ color: '#666', fontSize: '0.85rem', marginTop: '0.3rem' }}>设置投票信息和选项</p>
-      </div>
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '1rem' }}>
-          <label>投票标题 *</label>
-          <input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="请输入投票标题" required />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label>投票描述</label>
-          <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} rows={2} placeholder="请输入投票描述（可选）" />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.7rem', marginBottom: '1rem' }}>
-          <div>
-            <label>开始时间 *</label>
-            <input type="datetime-local" value={form.startAt} onChange={e => setForm({...form, startAt: e.target.value})} required />
-          </div>
-          <div>
-            <label>结束时间 *</label>
-            <input type="datetime-local" value={form.endAt} onChange={e => setForm({...form, endAt: e.target.value})} required />
-          </div>
-        </div>
-        <div style={{ marginBottom: '1rem', padding: '0.7rem', background: '#f8f9ff', borderRadius: '8px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: '500', marginBottom: 0 }}>
-            <input type="checkbox" checked={form.allowMultiple} onChange={e => setForm({...form, allowMultiple: e.target.checked})} style={{ width: 'auto' }} />
-            允许多选（用户可选择多个选项）
-          </label>
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label>投票选项 *</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-            {form.options.map((opt, idx) => (
-              <div key={idx} style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                <span style={{ minWidth: '20px', color: '#666', fontSize: '0.85rem' }}>{idx + 1}.</span>
-                <input value={opt} onChange={e => {
-                  const newOpts = [...form.options];
-                  newOpts[idx] = e.target.value;
-                  setForm({...form, options: newOpts});
-                }} placeholder={`选项 ${idx + 1}`} required style={{ flex: 1 }} />
-                {form.options.length > 2 && (
-                  <button type="button" onClick={() => removeOption(idx)} style={{ padding: '0.4em 0.7em', fontSize: '0.75em', background: '#fee', color: '#e74c3c', border: '1px solid #fcc', boxShadow: 'none' }}>✕</button>
+    <div className="cv-card">
+      <header className="cv-head">
+        <div className="cv-head-icon">📝</div>
+        <h1 className="cv-title">创建新投票</h1>
+        <p className="cv-sub">填写投票信息，创建后生成匿名投票入口</p>
+      </header>
+
+      <div className="cv-layout">
+        <form className="cv-form" onSubmit={handleSubmit} noValidate>
+          <section className="cv-section">
+            <div className="cv-section-head">
+              <span className="cv-step">1</span>
+              <h2 className="cv-section-title">基本信息</h2>
+            </div>
+
+            <div className="cv-field">
+              <label className="cv-label" htmlFor="cv-title">
+                投票标题 <span className="cv-req">*</span>
+              </label>
+              <input
+                id="cv-title"
+                value={form.title}
+                maxLength={80}
+                placeholder="例如：2026 年度最佳项目评选"
+                autoFocus
+                aria-required="true"
+                aria-invalid={Boolean(errors.title)}
+                aria-describedby={errors.title ? 'cv-title-error' : undefined}
+                onChange={event => {
+                  update('title', event.target.value);
+                  clearError('title');
+                }}
+              />
+              <div className="cv-field-foot">
+                {errors.title ? (
+                  <span id="cv-title-error" className="cv-error" role="alert">
+                    {errors.title}
+                  </span>
+                ) : (
+                  <span />
+                )}
+                <span className="cv-counter">{form.title.length}/80</span>
+              </div>
+            </div>
+
+            <div className="cv-field">
+              <label className="cv-label" htmlFor="cv-description">
+                投票描述 <span className="cv-optional">可选</span>
+              </label>
+              <textarea
+                id="cv-description"
+                rows={3}
+                maxLength={300}
+                placeholder="说明投票目的、规则或注意事项"
+                value={form.description}
+                onChange={event => update('description', event.target.value)}
+              />
+              <div className="cv-field-foot">
+                <span className="cv-hint">会显示在投票页标题下方</span>
+                <span className="cv-counter">{form.description.length}/300</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="cv-section">
+            <div className="cv-section-head">
+              <span className="cv-step">2</span>
+              <h2 className="cv-section-title">投票时间</h2>
+            </div>
+
+            <div className="cv-dates">
+              <div className="cv-field">
+                <label className="cv-label" htmlFor="cv-start">
+                  开始时间 <span className="cv-req">*</span>
+                </label>
+                <input
+                  id="cv-start"
+                  type="datetime-local"
+                  value={form.startAt}
+                  aria-required="true"
+                  aria-invalid={Boolean(errors.startAt)}
+                  onChange={event => {
+                    update('startAt', event.target.value);
+                    clearError('startAt');
+                    clearError('endAt');
+                  }}
+                />
+                {errors.startAt && (
+                  <div className="cv-field-foot">
+                    <span className="cv-error" role="alert">
+                      {errors.startAt}
+                    </span>
+                  </div>
                 )}
               </div>
-            ))}
+
+              <div className="cv-field">
+                <label className="cv-label" htmlFor="cv-end">
+                  结束时间 <span className="cv-req">*</span>
+                </label>
+                <input
+                  id="cv-end"
+                  type="datetime-local"
+                  value={form.endAt}
+                  aria-required="true"
+                  aria-invalid={Boolean(errors.endAt)}
+                  onChange={event => {
+                    update('endAt', event.target.value);
+                    clearError('endAt');
+                  }}
+                />
+                {errors.endAt && (
+                  <div className="cv-field-foot">
+                    <span className="cv-error" role="alert">
+                      {errors.endAt}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <p className="cv-hint">按你所在时区填写，系统统一以 UTC 存储。</p>
+          </section>
+
+          <section className="cv-section">
+            <div className="cv-section-head">
+              <span className="cv-step">3</span>
+              <h2 className="cv-section-title">投票方式</h2>
+            </div>
+
+            <div className="cv-segmented" role="group" aria-label="投票方式">
+              <button
+                type="button"
+                className={form.allowMultiple ? 'cv-seg' : 'cv-seg cv-seg--active'}
+                aria-pressed={!form.allowMultiple}
+                onClick={() => update('allowMultiple', false)}
+              >
+                单选
+              </button>
+              <button
+                type="button"
+                className={form.allowMultiple ? 'cv-seg cv-seg--active' : 'cv-seg'}
+                aria-pressed={form.allowMultiple}
+                onClick={() => update('allowMultiple', true)}
+              >
+                多选
+              </button>
+            </div>
+            <p className="cv-hint">
+              {form.allowMultiple ? '投票者可以选择多个选项' : '每位投票者只能选择 1 个选项'}
+            </p>
+          </section>
+
+          <section className="cv-section">
+            <div className="cv-section-head">
+              <span className="cv-step">4</span>
+              <h2 className="cv-section-title">投票选项</h2>
+              <span className="cv-count">{filledOptions.length} 个</span>
+            </div>
+
+            <div className="cv-options">
+              {form.options.map((option, index) => (
+                <div className="cv-option-row" key={index}>
+                  <span className="cv-option-num">{index + 1}</span>
+                  <input
+                    id={`cv-option-${index}`}
+                    className="cv-option-input"
+                    value={option}
+                    maxLength={80}
+                    placeholder={`选项 ${index + 1}`}
+                    aria-label={`选项 ${index + 1}`}
+                    onChange={event => setOption(index, event.target.value)}
+                    onKeyDown={event => handleOptionKeyDown(event, index)}
+                  />
+                  <div className="cv-option-tools">
+                    <button
+                      type="button"
+                      className="cv-icon-btn"
+                      aria-label={`上移选项 ${index + 1}`}
+                      title="上移"
+                      disabled={index === 0}
+                      onClick={() => moveOption(index, -1)}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="cv-icon-btn"
+                      aria-label={`下移选项 ${index + 1}`}
+                      title="下移"
+                      disabled={index === form.options.length - 1}
+                      onClick={() => moveOption(index, 1)}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="cv-icon-btn cv-icon-btn--danger"
+                      aria-label={`删除选项 ${index + 1}`}
+                      title="删除"
+                      disabled={form.options.length <= 2}
+                      onClick={() => removeOption(index)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button type="button" className="cv-add" onClick={addOption}>
+              + 添加选项
+            </button>
+
+            {errors.options ? (
+              <div className="cv-field-foot">
+                <span className="cv-error" role="alert">
+                  {errors.options}
+                </span>
+              </div>
+            ) : (
+              <p className="cv-hint">至少 2 个；按此顺序展示；悬停可调整顺序或删除，回车可继续添加</p>
+            )}
+          </section>
+
+          {serverError && (
+            <div className="cv-alert" role="alert">
+              {serverError}
+            </div>
+          )}
+
+          <div className="cv-actions">
+            <button type="button" className="cv-btn-ghost" onClick={() => navigate('/votes')}>
+              取消
+            </button>
+            <button type="submit" className="cv-btn-primary" disabled={submitting}>
+              {submitting ? '创建中…' : '创建投票'}
+            </button>
           </div>
-          <button type="button" onClick={addOption} style={{ marginTop: '0.5rem', padding: '0.4em 0.9em', fontSize: '0.8em', background: 'white', color: '#667eea', border: '1.5px solid #667eea', boxShadow: 'none' }}>+ 添加选项</button>
-        </div>
-        {error && <div style={{ padding: '0.6rem', background: '#fee', color: '#e74c3c', borderRadius: '8px', marginBottom: '0.8rem', fontSize: '0.85rem' }}>{error}</div>}
-        <button type="submit" style={{ width: '100%', fontSize: '0.9rem', padding: '0.75em' }}>创建投票</button>
-      </form>
+        </form>
+
+        <aside className="cv-preview" aria-label="投票页预览">
+          <div className="cv-preview-head">
+            <span className="cv-preview-dot" />
+            投票者看到的效果
+          </div>
+          <div className="cv-preview-card">
+            <h3 className="cv-preview-title">{form.title.trim() || '未命名投票'}</h3>
+            {form.description.trim() && <p className="cv-preview-desc">{form.description.trim()}</p>}
+            <div className="cv-preview-meta">
+              <span className="cv-pill">{form.allowMultiple ? '多选' : '单选'}</span>
+              <span>🕐 {formatRange(form.startAt, form.endAt)}</span>
+            </div>
+            <div className="cv-preview-label">投票选项</div>
+            <div className="cv-preview-options">
+              {previewOptions.map((option, index) => (
+                <div className="cv-preview-option" key={index}>
+                  <span>{form.allowMultiple ? '⬜' : '⚪'}</span>
+                  {option}
+                </div>
+              ))}
+            </div>
+            <div className="cv-preview-submit">提交投票</div>
+          </div>
+          <ul className="cv-tips">
+            <li>投票开始后参与者才能投票</li>
+            <li>每场投票每人只能参与一次</li>
+            <li>投票成功后必须下载全量记录 PDF</li>
+          </ul>
+        </aside>
+      </div>
     </div>
   );
 }
