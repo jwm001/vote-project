@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { AuthRequest } from "../../middleware/auth.middleware";
+import { messageOf, statusCodeOf } from "../../utils/errors";
 
 const authService = new AuthService();
 
@@ -22,7 +23,7 @@ export class AuthController {
 
       res.status(201).json(result);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
   }
 
@@ -31,14 +32,15 @@ export class AuthController {
       const result = await authService.login(req.body);
       res.json(result);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
   }
 
   async me(req: AuthRequest, res: Response) {
     const user = req.user;
     if (user) {
-      const { password, ...safeUser } = user as any;
+      const { password, idNumber, idNumberHash, idCardImages, ...safeUser } =
+        user as any;
       res.json({ user: safeUser });
     } else {
       res.json({ user: user });

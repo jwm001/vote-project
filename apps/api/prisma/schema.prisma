@@ -13,6 +13,7 @@ model User {
   password     String   @default("")
   realName     String
   idNumber     String
+  idNumberHash String?  @unique
   idCardImages String
   status       String   @default("PENDING")
   role         String   @default("USER")
@@ -29,6 +30,8 @@ model Vote {
   allowMultiple Boolean @default(false)
   startAt      DateTime
   endAt        DateTime
+  auditHash    String?
+  auditRecordedAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   options      Option[]

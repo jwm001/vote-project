@@ -59,7 +59,7 @@ export default function Register() {
         </div>
         <div style={{ marginBottom: '0.9rem' }}>
           <label>密码 *</label>
-          <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="请输入密码" required />
+          <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="请输入密码（至少 6 位）" minLength={6} required />
         </div>
         <div style={{ marginBottom: '0.9rem' }}>
           <label>真实姓名 *</label>
