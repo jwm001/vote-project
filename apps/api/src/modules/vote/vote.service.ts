@@ -214,21 +214,47 @@ export class VoteService {
     const histories = await prisma.userVoteHistory.findMany({
       where: { userId },
       orderBy: { votedAt: 'desc' },
+      include: {
+        vote: {
+          select: {
+            id: true,
+            title: true,
+            allowMultiple: true,
+            startAt: true,
+            endAt: true,
+          },
+        },
+      },
     });
-    const result = [];
-    for (const h of histories) {
-      const vote = await prisma.vote.findUnique({ where: { id: h.voteId } });
-      const ballot = await prisma.ballot.findFirst({
-        where: { voteId: h.voteId, sequenceNumber: h.ballotSequenceNumber },
-      });
-      result.push({
+
+    if (histories.length === 0) return [];
+
+    // 一次取出这些投票的全部 ballot，按 (voteId, sequenceNumber) 对应，避免逐条查询
+    const ballots = await prisma.ballot.findMany({
+      where: { voteId: { in: histories.map((h) => h.voteId) } },
+      select: {
+        voteId: true,
+        sequenceNumber: true,
+        pseudonym: true,
+        submittedAt: true,
+      },
+    });
+    const ballotMap = new Map(
+      ballots.map((b) => [`${b.voteId}:${b.sequenceNumber}`, b])
+    );
+
+    return histories.map((h) => {
+      const ballot = ballotMap.get(`${h.voteId}:${h.ballotSequenceNumber}`);
+      return {
         voteId: h.voteId,
-        voteTitle: vote?.title,
-        pseudonym: ballot?.pseudonym,
-        submittedAt: ballot?.submittedAt,
+        voteTitle: h.vote.title,
+        allowMultiple: h.vote.allowMultiple,
+        startAt: h.vote.startAt,
+        endAt: h.vote.endAt,
+        pseudonym: ballot?.pseudonym ?? null,
+        submittedAt: ballot?.submittedAt ?? h.votedAt,
         sequenceNumber: h.ballotSequenceNumber,
-      });
-    }
-    return result;
+      };
+    });
   }
 }
