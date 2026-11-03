@@ -40,39 +40,45 @@ export default function Register() {
   return (
     <div style={{
       background: 'white',
-      borderRadius: '16px',
-      padding: '2.5rem',
-      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-      maxWidth: '500px',
-      margin: '2rem auto'
+      borderRadius: '14px',
+      padding: '2rem 1.6rem',
+      boxShadow: '0 15px 50px rgba(0, 0, 0, 0.25)',
+      maxWidth: '460px',
+      margin: '1.5rem auto',
+      border: '1px solid rgba(255, 255, 255, 0.2)'
     }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '2rem', fontSize: '1.8rem' }}>注册（需实名认证）</h2>
+      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+        <div style={{ fontSize: '2.2rem', marginBottom: '0.4rem' }}>📝</div>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '0.3rem' }}>实名认证注册</h2>
+        <p style={{ color: '#666', fontSize: '0.85rem' }}>需提交真实信息并等待审核</p>
+      </div>
       <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label>用户名</label>
-          <input value={form.username} onChange={e => setForm({...form, username: e.target.value})} required />
+        <div style={{ marginBottom: '0.9rem' }}>
+          <label>用户名 *</label>
+          <input value={form.username} onChange={e => setForm({...form, username: e.target.value})} placeholder="请输入用户名" required />
         </div>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label>密码</label>
-          <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required />
+        <div style={{ marginBottom: '0.9rem' }}>
+          <label>密码 *</label>
+          <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="请输入密码" required />
         </div>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label>真实姓名</label>
-          <input value={form.realName} onChange={e => setForm({...form, realName: e.target.value})} required />
+        <div style={{ marginBottom: '0.9rem' }}>
+          <label>真实姓名 *</label>
+          <input value={form.realName} onChange={e => setForm({...form, realName: e.target.value})} placeholder="请输入真实姓名" required />
         </div>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label>身份证号</label>
-          <input value={form.idNumber} onChange={e => setForm({...form, idNumber: e.target.value})} required />
+        <div style={{ marginBottom: '0.9rem' }}>
+          <label>身份证号 *</label>
+          <input value={form.idNumber} onChange={e => setForm({...form, idNumber: e.target.value})} placeholder="请输入身份证号" required />
         </div>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label>身份证照片（可上传多张）</label>
-          <input type="file" multiple accept="image/*" onChange={e => setFiles(e.target.files)} required />
+        <div style={{ marginBottom: '1.2rem' }}>
+          <label>身份证照片 *</label>
+          <input type="file" multiple accept="image/*" onChange={e => setFiles(e.target.files)} required style={{ padding: '0.6em', background: '#f8f9fa' }} />
+          <p style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.3rem' }}>可上传正反面等多张照片</p>
         </div>
-        {error && <p style={{ color: '#e74c3c', marginBottom: '1rem' }}>{error}</p>}
-        <button type="submit" style={{ width: '100%' }}>注册</button>
+        {error && <div style={{ padding: '0.6rem', background: '#fee', color: '#e74c3c', borderRadius: '8px', marginBottom: '0.8rem', fontSize: '0.85rem' }}>{error}</div>}
+        <button type="submit" style={{ width: '100%', fontSize: '0.9rem', padding: '0.75em' }}>注册</button>
       </form>
-      <p style={{ textAlign: 'center', marginTop: '1.5rem', color: '#666' }}>
-        已有账号？ <Link to="/login">立即登录</Link>
+      <p style={{ textAlign: 'center', marginTop: '1.2rem', color: '#666', fontSize: '0.85rem' }}>
+        已有账号？ <Link to="/login" style={{ fontWeight: '600' }}>立即登录</Link>
       </p>
     </div>
   );
