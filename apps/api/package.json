@@ -8,7 +8,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no lint configured'",
-    "test": "echo 'no tests yet'",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "backfill:identity": "ts-node --transpile-only src/scripts/backfill-identity-hash.ts"
   },
   "dependencies": {
@@ -28,9 +29,12 @@
     "@types/jsonwebtoken": "^9.0.5",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.10.5",
+    "@types/supertest": "^7.2.1",
     "prisma": "^5.7.1",
+    "supertest": "^7.3.1",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.9"
   },
   "description": "",
   "main": "index.js",
