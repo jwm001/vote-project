@@ -18,3 +18,13 @@ export interface CreateVoteInput {
   durationMinutes?: number;
   options: string[];
 }
+
+export interface UpdateVoteInput {
+  title?: string;
+  description?: string;
+  allowMultiple?: boolean;
+  resultsPublicDuringVote?: boolean;
+  endAt?: Date;
+  durationMinutes?: number;
+  options?: string[];
+}

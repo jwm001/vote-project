@@ -1,5 +1,7 @@
 import { prisma } from "../../utils/prisma";
 import { AppError } from "../../utils/errors";
+import { ABSTAIN_TEXT, MAX_DURATION_MINUTES, MAX_OPTION_LENGTH, MAX_OPTIONS, MIN_DURATION_MINUTES } from "./vote.constants";
+import { CreateVoteInput, UpdateVoteInput, VotePhase } from "./vote.types";
 
 function generatePseudonym() {
   const timestamp = Date.now();
@@ -8,8 +10,6 @@ function generatePseudonym() {
 }
 
 const MAX_SEQUENCE_RETRIES = 5;
-const MAX_OPTION_LENGTH = 300;
-const MAX_OPTIONS = 50;
 
 function isUniqueConstraintError(error: any): boolean {
   return error?.code === "P2002";
@@ -46,61 +46,136 @@ function isTransientWriteConflict(error: any): boolean {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function getVotePhase(vote: {
+  participationMode: string;
+  startedAt: Date | null;
+  closedAt: Date | null;
+  endAt: Date;
+}): VotePhase {
+  const now = new Date();
+  if (vote.closedAt !== null || now.getTime() > new Date(vote.endAt).getTime()) {
+    return "ENDED";
+  }
+  if (vote.participationMode === "INVITE_ONLY" && vote.startedAt === null) {
+    return "DRAFT";
+  }
+  return "LIVE";
+}
+
 export class VoteService {
-  async createVote(data: {
-    creatorId: string;
-    title: string;
-    description?: string;
-    allowMultiple: boolean;
-    startAt: Date;
-    endAt: Date;
-    options: string[];
-  }) {
-    const title = (data.title || "").trim();
+  async assertCreator(voteId: string, creatorId: string) {
+    const vote = await prisma.vote.findUnique({
+      where: { id: voteId },
+    });
+    if (!vote) {
+      throw new AppError("Vote not found", 404);
+    }
+    if (vote.creatorId !== creatorId) {
+      throw new AppError("Not the creator of this vote", 403);
+    }
+    return vote;
+  }
+
+  private validateOptions(options: unknown): string[] {
+    if (!Array.isArray(options)) {
+      throw new AppError("请至少提供两个选项", 400);
+    }
+    const trimmed = options.map((text) => String(text ?? "").trim());
+    if (trimmed.length < 2) {
+      throw new AppError("投票至少需要两个选项", 400);
+    }
+    if (trimmed.length > MAX_OPTIONS) {
+      throw new AppError(`选项不能超过 ${MAX_OPTIONS} 个`, 400);
+    }
+    if (trimmed.some((text) => !text)) {
+      throw new AppError("选项内容不能为空", 400);
+    }
+    if (trimmed.some((text) => text.length > MAX_OPTION_LENGTH)) {
+      throw new AppError(`单个选项不能超过 ${MAX_OPTION_LENGTH} 个字符`, 400);
+    }
+    if (new Set(trimmed).size !== trimmed.length) {
+      throw new AppError("选项内容不能重复", 400);
+    }
+    if (trimmed.some((text) => text === ABSTAIN_TEXT)) {
+      throw new AppError(`选项不能包含 ${ABSTAIN_TEXT}`, 400);
+    }
+    return trimmed;
+  }
+
+  async createVote(input: CreateVoteInput) {
+    const title = String(input.title ?? "").trim();
     if (!title) {
       throw new AppError("请填写投票标题", 400);
     }
 
-    if (Number.isNaN(data.startAt.getTime()) || Number.isNaN(data.endAt.getTime())) {
-      throw new AppError("投票时间格式不正确", 400);
-    }
-    if (data.endAt.getTime() <= data.startAt.getTime()) {
-      throw new AppError("结束时间必须晚于开始时间", 400);
-    }
+    const options = this.validateOptions(input.options);
 
-    if (!Array.isArray(data.options)) {
-      throw new AppError("请至少提供一个选项", 400);
-    }
-    const options = data.options.map((text) => String(text ?? "").trim());
-    if (options.length === 0) {
-      throw new AppError("请至少提供一个选项", 400);
-    }
-    if (options.length > MAX_OPTIONS) {
-      throw new AppError(`选项不能超过 ${MAX_OPTIONS} 个`, 400);
-    }
-    if (options.some((text) => !text)) {
-      throw new AppError("选项内容不能为空", 400);
-    }
-    if (options.some((text) => text.length > MAX_OPTION_LENGTH)) {
-      throw new AppError(`单个选项不能超过 ${MAX_OPTION_LENGTH} 个字符`, 400);
-    }
-    if (new Set(options).size !== options.length) {
-      throw new AppError("选项内容不能重复", 400);
+    const now = new Date();
+    let startAt: Date;
+    let endAt: Date;
+    let durationMinutes: number | null;
+    let startedAt: Date | null;
+
+    if (input.endAt !== undefined) {
+      // Mode A: creator picks an absolute end time.
+      const end = new Date(input.endAt);
+      if (Number.isNaN(end.getTime())) {
+        throw new AppError("投票时间格式不正确", 400);
+      }
+      if (end.getTime() <= now.getTime()) {
+        throw new AppError("结束时间必须晚于开始时间", 400);
+      }
+      startAt = now;
+      endAt = end;
+      durationMinutes = null;
+      startedAt = now;
+    } else if (input.durationMinutes !== undefined) {
+      // Mode B: creator picks a duration from start.
+      const duration = input.durationMinutes;
+      if (
+        typeof duration !== "number" ||
+        !Number.isInteger(duration) ||
+        duration < MIN_DURATION_MINUTES ||
+        duration > MAX_DURATION_MINUTES
+      ) {
+        throw new AppError(
+          `投票时长需为 ${MIN_DURATION_MINUTES} 到 ${MAX_DURATION_MINUTES} 之间的整数分钟`,
+          400
+        );
+      }
+      startAt = now;
+      endAt = new Date(now.getTime() + duration * 60_000);
+      durationMinutes = duration;
+      startedAt = null;
+    } else {
+      throw new AppError("请选择投票结束时间或时长", 400);
     }
 
     const vote = await prisma.vote.create({
       data: {
         title,
-        description: data.description,
-        creatorId: data.creatorId,
-        allowMultiple: data.allowMultiple,
-        startAt: data.startAt,
-        endAt: data.endAt,
+        description: input.description,
+        creatorId: input.creatorId,
+        allowMultiple: input.allowMultiple,
+        participationMode: input.participationMode,
+        resultsPublicDuringVote: input.resultsPublicDuringVote ?? false,
+        durationMinutes,
+        startAt,
+        endAt,
+        startedAt,
         options: {
-          create: options.map((text, index) => ({
-            text,
-            order: index,
-          })),
+          create: [
+            ...options.map((text, index) => ({
+              text,
+              order: index,
+              isAbstain: false,
+            })),
+            {
+              text: ABSTAIN_TEXT,
+              order: options.length,
+              isAbstain: true,
+            },
+          ],
         },
       },
       include: {
@@ -108,6 +183,160 @@ export class VoteService {
       },
     });
     return vote;
+  }
+
+  async updateVote(id: string, creatorId: string, input: UpdateVoteInput) {
+    const vote = await this.assertCreator(id, creatorId);
+
+    if ((input as any).participationMode !== undefined) {
+      throw new AppError("不允许修改投票模式", 400);
+    }
+
+    const phase = getVotePhase(vote);
+
+    const hasBallot = !!(await prisma.ballot.findFirst({
+      where: { voteId: id },
+      select: { id: true },
+    }));
+    const editable = vote.participationMode === "OPEN_LINK" ? !hasBallot : vote.startedAt === null;
+    if (!editable) {
+      throw new AppError("投票已开始，不能修改", 409);
+    }
+
+    const data: {
+      title?: string;
+      description?: string;
+      allowMultiple?: boolean;
+      resultsPublicDuringVote?: boolean;
+      endAt?: Date;
+      durationMinutes?: number | null;
+    } = {};
+
+    if (input.title !== undefined) {
+      const title = String(input.title ?? "").trim();
+      if (!title) {
+        throw new AppError("请填写投票标题", 400);
+      }
+      data.title = title;
+    }
+    if (input.description !== undefined) {
+      data.description = input.description;
+    }
+    if (input.allowMultiple !== undefined) {
+      data.allowMultiple = Boolean(input.allowMultiple);
+    }
+    if (input.resultsPublicDuringVote !== undefined) {
+      if (
+        vote.participationMode === "OPEN_LINK" &&
+        input.resultsPublicDuringVote !== vote.resultsPublicDuringVote
+      ) {
+        throw new AppError("OPEN_LINK 投票创建时即为进行中，不能修改 resultsPublicDuringVote", 409);
+      }
+      data.resultsPublicDuringVote = input.resultsPublicDuringVote;
+    }
+    if (input.endAt !== undefined) {
+      const end = new Date(input.endAt);
+      if (Number.isNaN(end.getTime())) {
+        throw new AppError("投票时间格式不正确", 400);
+      }
+      if (end.getTime() <= new Date().getTime()) {
+        throw new AppError("结束时间必须晚于开始时间", 400);
+      }
+      if (vote.durationMinutes === null) {
+        // Mode A: absolute end time, started.
+        data.endAt = end;
+        data.durationMinutes = null;
+      }
+    }
+    if (input.durationMinutes !== undefined) {
+      const duration = input.durationMinutes;
+      if (
+        typeof duration !== "number" ||
+        !Number.isInteger(duration) ||
+        duration < MIN_DURATION_MINUTES ||
+        duration > MAX_DURATION_MINUTES
+      ) {
+        throw new AppError(
+          `投票时长需为 ${MIN_DURATION_MINUTES} 到 ${MAX_DURATION_MINUTES} 之间的整数分钟`,
+          400
+        );
+      }
+      data.durationMinutes = duration;
+      data.endAt = new Date(Date.now() + duration * 60_000);
+    }
+
+    if (input.options !== undefined) {
+      const options = this.validateOptions(input.options);
+      await prisma.$transaction(async (tx) => {
+        await tx.option.deleteMany({ where: { voteId: id } });
+        await tx.option.createMany({
+          data: [
+            ...options.map((text, index) => ({
+              voteId: id,
+              text,
+              order: index,
+              isAbstain: false,
+            })),
+            {
+              voteId: id,
+              text: ABSTAIN_TEXT,
+              order: options.length,
+              isAbstain: true,
+            },
+          ],
+        });
+      });
+    }
+
+    return prisma.vote.update({
+      where: { id },
+      data,
+      include: {
+        options: true,
+      },
+    });
+  }
+
+  async deleteVote(id: string, creatorId: string) {
+    const vote = await this.assertCreator(id, creatorId);
+
+    const hasBallot = !!(await prisma.ballot.findFirst({
+      where: { voteId: id },
+      select: { id: true },
+    }));
+    const editable = vote.participationMode === "OPEN_LINK" ? !hasBallot : vote.startedAt === null;
+    if (!editable) {
+      throw new AppError("投票已开始，不能修改", 409);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.ballot.deleteMany({ where: { voteId: id } });
+      await tx.userVoteHistory.deleteMany({ where: { voteId: id } });
+      await tx.voteInvite.deleteMany({ where: { voteId: id } });
+      await tx.option.deleteMany({ where: { voteId: id } });
+      await tx.vote.delete({ where: { id } });
+    });
+  }
+
+  async endVote(id: string, creatorId: string) {
+    const vote = await this.assertCreator(id, creatorId);
+    const phase = getVotePhase(vote);
+
+    if (phase === "DRAFT") {
+      throw new AppError("请先开始投票", 409);
+    }
+    if (phase === "ENDED") {
+      throw new AppError("投票已结束", 409);
+    }
+
+    const ended = await prisma.vote.update({
+      where: { id },
+      data: { closedAt: new Date() },
+      include: {
+        options: true,
+      },
+    });
+    return ended;
   }
 
   async getVotes() {

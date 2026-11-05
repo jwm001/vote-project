@@ -16,9 +16,9 @@ export class VoteController {
         return res.status(403).json({ error: "Only approved users can create votes" });
       }
 
-      const { title, description, allowMultiple, startAt, endAt, options } = req.body;
+      const { title, description, allowMultiple, participationMode, resultsPublicDuringVote, endAt, durationMinutes, options } = req.body;
 
-      if (!title || !startAt || !endAt || !options || !Array.isArray(options) || options.length === 0) {
+      if (!title || !participationMode || !options || !Array.isArray(options) || options.length === 0) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
@@ -27,12 +27,71 @@ export class VoteController {
         title,
         description,
         allowMultiple: Boolean(allowMultiple),
-        startAt: new Date(startAt),
-        endAt: new Date(endAt),
+        participationMode,
+        resultsPublicDuringVote: resultsPublicDuringVote === undefined ? undefined : Boolean(resultsPublicDuringVote),
+        endAt: endAt ? new Date(endAt) : undefined,
+        durationMinutes: durationMinutes ? Number(durationMinutes) : undefined,
         options,
       });
 
       res.status(201).json({ vote });
+    } catch (error: any) {
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
+    }
+  }
+
+  async update(req: AuthRequest, res: Response) {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (user.status !== "APPROVED") {
+        return res.status(403).json({ error: "Only approved users can update votes" });
+      }
+
+      const { id } = req.params;
+      const vote = await voteService.updateVote(id, user.id, req.body);
+
+      res.json({ vote });
+    } catch (error: any) {
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
+    }
+  }
+
+  async remove(req: AuthRequest, res: Response) {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (user.status !== "APPROVED") {
+        return res.status(403).json({ error: "Only approved users can delete votes" });
+      }
+
+      const { id } = req.params;
+      await voteService.deleteVote(id, user.id);
+
+      res.json({ ok: true });
+    } catch (error: any) {
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
+    }
+  }
+
+  async end(req: AuthRequest, res: Response) {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (user.status !== "APPROVED") {
+        return res.status(403).json({ error: "Only approved users can end votes" });
+      }
+
+      const { id } = req.params;
+      const vote = await voteService.endVote(id, user.id);
+
+      res.json({ vote });
     } catch (error: any) {
       res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
