@@ -12,14 +12,17 @@ model User {
   username     String   @unique
   password     String   @default("")
   realName     String
-  idNumber     String
+  idNumber     String   @default("")
   idNumberHash String?  @unique
-  idCardImages String
-  status       String   @default("PENDING")
+  idCardImages String   @default("[]")
+  status       String   @default("PENDING_VERIFICATION")
   role         String   @default("USER")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   userVoteHistories UserVoteHistory[]
+  invites     VoteInvite[]
+  identityVerificationRef String?
+  identityVerifiedAt      DateTime?
 }
 
 model Vote {
@@ -28,15 +31,21 @@ model Vote {
   description  String?
   creatorId    String
   allowMultiple Boolean @default(false)
+  participationMode String @default("OPEN_LINK")
+  durationMinutes Int?
+  resultsPublicDuringVote Boolean @default(false)
   startAt      DateTime
   endAt        DateTime
   auditHash    String?
   auditRecordedAt DateTime?
+  startedAt    DateTime?
+  closedAt     DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   options      Option[]
   ballots      Ballot[]
   userVoteHistories UserVoteHistory[]
+  invites      VoteInvite[]
 }
 
 model Option {
@@ -45,6 +54,7 @@ model Option {
   vote   Vote   @relation(fields: [voteId], references: [id])
   text   String
   order  Int
+  isAbstain Boolean @default(false)
 }
 
 model Ballot {
@@ -69,4 +79,21 @@ model UserVoteHistory {
   votedAt            DateTime @default(now())
 
   @@unique([userId, voteId])
+}
+
+model VoteInvite {
+  id            String   @id @default(cuid())
+  voteId        String
+  vote          Vote     @relation(fields: [voteId], references: [id])
+  inviteeUserId String?
+  invitee       User?    @relation(fields: [inviteeUserId], references: [id])
+  token         String?  @unique
+  status        String   @default("INVITED")
+  acceptedAt    DateTime?
+  removedAt     DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime @default(now())
+
+  @@unique([voteId, inviteeUserId])
+  @@index([voteId])
 }

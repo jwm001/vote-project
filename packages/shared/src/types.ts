@@ -1,8 +1,4 @@
-export enum UserStatus {
-  PENDING = "PENDING",
-  APPROVED = "APPROVED",
-  REJECTED = "REJECTED",
-}
+export type UserStatus = "PENDING_VERIFICATION" | "APPROVED" | "REJECTED";
 
 export enum UserRole {
   USER = "USER",

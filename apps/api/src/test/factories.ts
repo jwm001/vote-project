@@ -6,9 +6,8 @@ export function makeUser(username = "alice", status = "APPROVED") {
       username,
       password: "x",
       realName: "enc",
-      idNumber: `enc-${username}`,
-      idCardImages: "[]",
       status,
+      idNumberHash: `hash-${username}`,
     },
   });
 }

@@ -1,6 +1,7 @@
 import { prisma } from "../utils/prisma";
 
 export async function resetDb() {
+  await prisma.voteInvite.deleteMany();
   await prisma.userVoteHistory.deleteMany();
   await prisma.ballot.deleteMany();
   await prisma.option.deleteMany();
