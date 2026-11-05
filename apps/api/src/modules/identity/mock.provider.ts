@@ -1,5 +1,5 @@
 import type { IdentityInput, IdentityProvider, IdentityResult } from "./identity.provider";
-import { hashIdNumber, normalizeIdNumber } from "../../utils/identity";
+import { hashIdNumber, isValidIdNumber, normalizeIdNumber } from "../../utils/identity";
 
 const DEFAULT_MOCK_ID_NUMBERS = "110101199001011234";
 
@@ -7,7 +7,7 @@ export class MockIdentityProvider implements IdentityProvider {
   async verify(input: IdentityInput): Promise<IdentityResult> {
     const idNumber = normalizeIdNumber(input.idNumber);
 
-    if (!/^\d{17}[\dX]$/.test(idNumber)) {
+    if (!isValidIdNumber(idNumber)) {
       return { ok: false, reason: "invalid_id_number" };
     }
 

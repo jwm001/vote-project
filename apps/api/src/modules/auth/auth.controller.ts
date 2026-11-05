@@ -8,7 +8,7 @@ const authService = new AuthService();
 export class AuthController {
   async register(req: Request, res: Response) {
     try {
-      const { realName, idNumber, username, password } = req.body;
+      const { realName, idNumber, username, password } = req.body ?? {};
 
       const result = await authService.register({
         username,
@@ -26,7 +26,7 @@ export class AuthController {
 
   async login(req: Request, res: Response) {
     try {
-      const result = await authService.login(req.body);
+      const result = await authService.login(req.body ?? {});
       res.json(result);
     } catch (error: any) {
       res.status(statusCodeOf(error)).json({ error: messageOf(error) });
@@ -35,7 +35,7 @@ export class AuthController {
 
   async reverify(req: AuthRequest, res: Response) {
     try {
-      const { realName, idNumber } = req.body;
+      const { realName, idNumber } = req.body ?? {};
       const user = req.user;
       if (!user) {
         return res.status(401).json({ error: "Unauthorized" });

@@ -3,6 +3,7 @@ import { AuthService, toPublicUser } from "./auth.service";
 import { prisma } from "../../utils/prisma";
 import { resetDb } from "../../test/db";
 import { resetRateLimits } from "../../utils/rate-limit";
+import { decrypt } from "../../utils/encryption";
 
 const okProvider = { verify: async () => ({ ok: true, reference: "ref-1" }) };
 const badProvider = { verify: async () => ({ ok: false, reason: "mismatch" }) };
@@ -182,6 +183,68 @@ describe("AuthService.reverifyIdentity", () => {
     expect(saved.status).toBe("PENDING_VERIFICATION");
   });
 
+  it("persists the corrected real name during reverify", async () => {
+    const pending = await new AuthService(downProvider as any).register({
+      username: "bob",
+      password: "secret1",
+      realName: "李四",
+      idNumber: "110101199001019999",
+      ip: "2.2.2.2",
+    });
+
+    await new AuthService(okProvider as any).reverifyIdentity(pending.user.id, {
+      realName: "李四修正",
+      idNumber: "110101199001019999",
+      ip: "2.2.2.2",
+    });
+
+    const saved = await prisma.user.findUniqueOrThrow({ where: { username: "bob" } });
+    expect(decrypt(saved.realName)).toBe("李四修正");
+  });
+
+  it("rejects reverify with an empty real name", async () => {
+    const pending = await new AuthService(downProvider as any).register({
+      username: "bob",
+      password: "secret1",
+      realName: "李四",
+      idNumber: "110101199001019999",
+      ip: "2.2.2.2",
+    });
+
+    await expect(
+      new AuthService(okProvider as any).reverifyIdentity(pending.user.id, {
+        realName: "   ",
+        idNumber: "110101199001019999",
+        ip: "2.2.2.2",
+      })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("throws 429 when the reverify rate limit is exceeded", async () => {
+    const pending = await new AuthService(downProvider as any).register({
+      username: "dave",
+      password: "secret1",
+      realName: "赵六",
+      idNumber: "110101199001019997",
+      ip: "7.7.7.7",
+    });
+
+    let lastError: any;
+    for (let i = 0; i < 6; i++) {
+      try {
+        await new AuthService(badProvider as any).reverifyIdentity(pending.user.id, {
+          realName: "赵六",
+          idNumber: "110101199001019997",
+          ip: "7.7.7.7",
+        });
+      } catch (error: any) {
+        lastError = error;
+      }
+    }
+
+    expect(lastError).toMatchObject({ status: 429 });
+  });
+
   it("rejects re-verification of an already approved user", async () => {
     const approved = await new AuthService(okProvider as any).register({
       username: "carol",
@@ -220,6 +283,7 @@ describe("toPublicUser", () => {
     expect(published.realName).toBe("张三");
     expect(published).not.toHaveProperty("idNumber");
     expect(published).not.toHaveProperty("idCardImages");
+    expect(published).not.toHaveProperty("idNumberHash");
     expect(published).not.toHaveProperty("password");
   });
 });

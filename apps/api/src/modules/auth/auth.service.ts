@@ -195,6 +195,10 @@ export class AuthService {
     const idNumber = normalizeIdNumber(data.idNumber || "");
     const idNumberHash = hashIdNumber(idNumber);
 
+    if (!realName) {
+      throw new AppError("请填写真实姓名", 400);
+    }
+
     const existingIdNumber = await prisma.user.findUnique({
       where: { idNumberHash },
     });
@@ -227,6 +231,7 @@ export class AuthService {
       where: { id: userId },
       data: {
         status: "APPROVED",
+        realName: encrypt(realName),
         idNumberHash,
         identityVerificationRef: verifyResult.reference ?? null,
         identityVerifiedAt: new Date(),

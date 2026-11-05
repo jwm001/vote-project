@@ -1,8 +1,6 @@
 import { MockIdentityProvider } from "./mock.provider";
 import { HttpIdentityProvider } from "./http.provider";
 
-export { isValidIdNumber } from "../../utils/identity";
-
 export interface IdentityInput {
   realName: string;
   idNumber: string;
