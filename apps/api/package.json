@@ -10,7 +10,8 @@
     "lint": "echo 'no lint configured'",
     "test": "vitest run",
     "test:watch": "vitest",
-    "backfill:identity": "ts-node --transpile-only src/scripts/backfill-identity-hash.ts"
+    "backfill:identity": "ts-node --transpile-only src/scripts/backfill-identity-hash.ts",
+    "cleanup:identity": "ts-node --transpile-only src/scripts/cleanup-legacy-identity.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.7.1",
