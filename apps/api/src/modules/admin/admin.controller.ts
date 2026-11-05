@@ -1,36 +1,27 @@
 import { Response } from "express";
 import { AdminService } from "./admin.service";
 import { AuthRequest } from "../../middleware/auth.middleware";
+import { statusCodeOf, messageOf } from "../../utils/errors";
 
 const adminService = new AdminService();
 
 export class AdminController {
-  async listPending(req: AuthRequest, res: Response) {
+  async listUsers(req: AuthRequest, res: Response) {
     try {
-      const users = await adminService.listPending();
+      const users = await adminService.listUsers();
       res.json({ users });
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
   }
 
-  async approve(req: AuthRequest, res: Response) {
+  async resetPassword(req: AuthRequest, res: Response) {
     try {
       const { id } = req.params;
-      const user = await adminService.approve(id);
-      res.json({ user });
+      const result = await adminService.resetPassword(id);
+      res.json(result);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  }
-
-  async reject(req: AuthRequest, res: Response) {
-    try {
-      const { id } = req.params;
-      const user = await adminService.reject(id);
-      res.json({ user });
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
   }
 }

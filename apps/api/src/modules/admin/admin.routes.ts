@@ -6,8 +6,7 @@ import { adminMiddleware } from "../../middleware/admin.middleware";
 const router = Router();
 const adminController = new AdminController();
 
-router.get("/pending", authMiddleware, adminMiddleware, adminController.listPending.bind(adminController));
-router.post("/:id/approve", authMiddleware, adminMiddleware, adminController.approve.bind(adminController));
-router.post("/:id/reject", authMiddleware, adminMiddleware, adminController.reject.bind(adminController));
+router.get("/users", authMiddleware, adminMiddleware, adminController.listUsers.bind(adminController));
+router.post("/users/:id/reset-password", authMiddleware, adminMiddleware, adminController.resetPassword.bind(adminController));
 
 export default router;

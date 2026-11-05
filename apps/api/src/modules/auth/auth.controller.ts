@@ -33,6 +33,23 @@ export class AuthController {
     }
   }
 
+  async changePassword(req: AuthRequest, res: Response) {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { currentPassword, newPassword } = req.body ?? {};
+
+      const result = await authService.changePassword(user.id, currentPassword, newPassword);
+
+      res.json(result);
+    } catch (error: any) {
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
+    }
+  }
+
   async reverify(req: AuthRequest, res: Response) {
     try {
       const { realName, idNumber } = req.body ?? {};

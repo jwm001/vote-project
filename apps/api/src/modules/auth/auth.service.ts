@@ -182,6 +182,28 @@ export class AuthService {
     return { token, user: toPublicUser(user) };
   }
 
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new AppError("用户不存在", 404);
+    }
+    if (!(await bcrypt.compare(currentPassword || "", user.password))) {
+      throw new AppError("当前密码不正确", 400);
+    }
+    if ((newPassword || "").length < MIN_PASSWORD_LENGTH) {
+      throw new AppError(`密码至少 ${MIN_PASSWORD_LENGTH} 位`, 400);
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    return { user: toPublicUser(updated) };
+  }
+
   async reverifyIdentity(userId: string, data: ReverifyInput) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
