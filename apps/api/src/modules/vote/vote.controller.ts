@@ -29,8 +29,8 @@ export class VoteController {
         allowMultiple: Boolean(allowMultiple),
         participationMode,
         resultsPublicDuringVote: resultsPublicDuringVote === undefined ? undefined : Boolean(resultsPublicDuringVote),
-        endAt: endAt ? new Date(endAt) : undefined,
-        durationMinutes: durationMinutes ? Number(durationMinutes) : undefined,
+        endAt: endAt === undefined ? undefined : new Date(endAt),
+        durationMinutes: durationMinutes === undefined ? undefined : Number(durationMinutes),
         options,
       });
 

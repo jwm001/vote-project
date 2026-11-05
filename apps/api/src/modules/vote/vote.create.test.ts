@@ -41,7 +41,7 @@ describe("VoteService.createVote", () => {
     const vote = await voteService.createVote({
       creatorId: creator.id,
       title: "T",
-      participationMode: "OPEN_LINK",
+      participationMode: "INVITE_ONLY",
       allowMultiple: false,
       durationMinutes: 60,
       options: ["A", "B"],
@@ -158,8 +158,65 @@ describe("VoteService.createVote", () => {
       voteService.createVote({
         creatorId: creator.id,
         title: "T",
+        participationMode: "INVITE_ONLY",
+        allowMultiple: false,
+        options: ["A", "B"],
+      })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("rejects a mode B vote that provides endAt", async () => {
+    const creator = await makeUser("creator");
+    await expect(
+      voteService.createVote({
+        creatorId: creator.id,
+        title: "T",
+        participationMode: "INVITE_ONLY",
+        allowMultiple: false,
+        endAt: new Date(Date.now() + 86_400_000),
+        options: ["A", "B"],
+      })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("rejects an OPEN_LINK vote that provides durationMinutes", async () => {
+    const creator = await makeUser("creator");
+    await expect(
+      voteService.createVote({
+        creatorId: creator.id,
+        title: "T",
         participationMode: "OPEN_LINK",
         allowMultiple: false,
+        durationMinutes: 60,
+        options: ["A", "B"],
+      })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("rejects a vote that provides both endAt and durationMinutes", async () => {
+    const creator = await makeUser("creator");
+    await expect(
+      voteService.createVote({
+        creatorId: creator.id,
+        title: "T",
+        participationMode: "OPEN_LINK",
+        allowMultiple: false,
+        endAt: new Date(Date.now() + 86_400_000),
+        durationMinutes: 60,
+        options: ["A", "B"],
+      })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("rejects an invalid participation mode", async () => {
+    const creator = await makeUser("creator");
+    await expect(
+      voteService.createVote({
+        creatorId: creator.id,
+        title: "T",
+        participationMode: "WEIRD" as any,
+        allowMultiple: false,
+        endAt: new Date(Date.now() + 86_400_000),
         options: ["A", "B"],
       })
     ).rejects.toMatchObject({ status: 400 });
@@ -185,7 +242,7 @@ describe("VoteService.createVote", () => {
       voteService.createVote({
         creatorId: creator.id,
         title: "T",
-        participationMode: "OPEN_LINK",
+        participationMode: "INVITE_ONLY",
         allowMultiple: false,
         durationMinutes: 0,
         options: ["A", "B"],
@@ -304,6 +361,22 @@ describe("VoteService.updateVote", () => {
     expect(updated.resultsPublicDuringVote).toBe(true);
   });
 
+  it("allows an INVITE_ONLY draft to change resultsPublicDuringVote", async () => {
+    const creator = await makeUser("creator");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "INVITE_ONLY",
+      allowMultiple: false,
+      durationMinutes: 60,
+      resultsPublicDuringVote: false,
+      options: ["A", "B"],
+    });
+
+    const updated = await voteService.updateVote(vote.id, creator.id, { resultsPublicDuringVote: true });
+    expect(updated.resultsPublicDuringVote).toBe(true);
+  });
+
   it("rejects changing the participation mode", async () => {
     const creator = await makeUser("creator");
     const vote = await voteService.createVote({
@@ -319,10 +392,8 @@ describe("VoteService.updateVote", () => {
       voteService.updateVote(vote.id, creator.id, { participationMode: "INVITE_ONLY" } as any)
     ).rejects.toMatchObject({ status: 400 });
   });
-});
 
-describe("VoteService.deleteVote", () => {
-  it("deletes a vote before the first ballot and clears related rows", async () => {
+  it("rejects updating a mode A vote with durationMinutes", async () => {
     const creator = await makeUser("creator");
     const vote = await voteService.createVote({
       creatorId: creator.id,
@@ -333,12 +404,78 @@ describe("VoteService.deleteVote", () => {
       options: ["A", "B"],
     });
 
+    await expect(voteService.updateVote(vote.id, creator.id, { durationMinutes: 60 })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("rejects updating a mode B draft vote with endAt", async () => {
+    const creator = await makeUser("creator");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "INVITE_ONLY",
+      allowMultiple: false,
+      durationMinutes: 60,
+      options: ["A", "B"],
+    });
+
+    await expect(
+      voteService.updateVote(vote.id, creator.id, { endAt: new Date(Date.now() + 86_400_000) })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("rejects updating a vote with a past endAt", async () => {
+    const creator = await makeUser("creator");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "OPEN_LINK",
+      allowMultiple: false,
+      endAt: new Date(Date.now() + 86_400_000),
+      options: ["A", "B"],
+    });
+
+    await expect(
+      voteService.updateVote(vote.id, creator.id, { endAt: new Date(Date.now() - 86_400_000) })
+    ).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe("VoteService.deleteVote", () => {
+  it("deletes a mode B draft vote together with ballots, history, invites and options", async () => {
+    const creator = await makeUser("creator");
+    const voter = await makeUser("voter");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "INVITE_ONLY",
+      allowMultiple: false,
+      durationMinutes: 60,
+      options: ["A", "B"],
+    });
+    const option = await prisma.option.findFirstOrThrow({ where: { voteId: vote.id, isAbstain: false } });
+
+    await prisma.ballot.create({
+      data: {
+        voteId: vote.id,
+        pseudonym: "user_x",
+        optionIds: JSON.stringify([option.id]),
+        sequenceNumber: 1,
+      },
+    });
+    await prisma.userVoteHistory.create({
+      data: { userId: voter.id, voteId: vote.id, ballotSequenceNumber: 1 },
+    });
+    await prisma.voteInvite.create({
+      data: { voteId: vote.id, inviteeUserId: voter.id, status: "INVITED" },
+    });
+
     await expect(voteService.deleteVote(vote.id, creator.id)).resolves.toBeUndefined();
 
     expect(await prisma.vote.count()).toBe(0);
     expect(await prisma.option.count()).toBe(0);
     expect(await prisma.ballot.count()).toBe(0);
     expect(await prisma.userVoteHistory.count()).toBe(0);
+    expect(await prisma.voteInvite.count()).toBe(0);
   });
 
   it("rejects deleting a vote after the first ballot", async () => {
@@ -394,6 +531,21 @@ describe("VoteService.endVote", () => {
 
     const ended = await voteService.endVote(vote.id, creator.id);
     expect(ended.closedAt).not.toBeNull();
+  });
+
+  it("rejects ending an ended vote", async () => {
+    const creator = await makeUser("creator");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "OPEN_LINK",
+      allowMultiple: false,
+      endAt: new Date(Date.now() + 86_400_000),
+      options: ["A", "B"],
+    });
+
+    await voteService.endVote(vote.id, creator.id);
+    await expect(voteService.endVote(vote.id, creator.id)).rejects.toMatchObject({ status: 409 });
   });
 });
 
