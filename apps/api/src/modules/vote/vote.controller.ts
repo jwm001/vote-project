@@ -97,23 +97,16 @@ export class VoteController {
     }
   }
 
-  async list(req: AuthRequest, res: Response) {
-    try {
-      const votes = await voteService.getVotes();
-      res.json({ votes });
-    } catch (error: any) {
-      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
-    }
-  }
-
   async getById(req: AuthRequest, res: Response) {
     try {
-      const { id } = req.params;
-      const vote = await voteService.getVoteById(id);
-      if (!vote) {
-        return res.status(404).json({ error: "Vote not found" });
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
       }
-      res.json({ vote });
+
+      const { id } = req.params;
+      const detail = await voteService.getVoteById(id, user);
+      res.json(detail);
     } catch (error: any) {
       res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }

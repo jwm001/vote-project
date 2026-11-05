@@ -1,7 +1,8 @@
 import { prisma } from "../../utils/prisma";
 import { AppError } from "../../utils/errors";
 import { ABSTAIN_TEXT, MAX_DURATION_MINUTES, MAX_OPTION_LENGTH, MAX_OPTIONS, MIN_DURATION_MINUTES } from "./vote.constants";
-import { CreateVoteInput, UpdateVoteInput, VotePhase } from "./vote.types";
+import { CreateVoteInput, UpdateVoteInput, VotePhase, VoteViewer } from "./vote.types";
+import { getVotePhase } from "./vote.phase";
 
 function generatePseudonym() {
   const timestamp = Date.now();
@@ -45,22 +46,6 @@ function isTransientWriteConflict(error: any): boolean {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function getVotePhase(vote: {
-  participationMode: string;
-  startedAt: Date | null;
-  closedAt: Date | null;
-  endAt: Date;
-}): VotePhase {
-  const now = new Date();
-  if (vote.closedAt !== null || now.getTime() > new Date(vote.endAt).getTime()) {
-    return "ENDED";
-  }
-  if (vote.participationMode === "INVITE_ONLY" && vote.startedAt === null) {
-    return "DRAFT";
-  }
-  return "LIVE";
-}
 
 export class VoteService {
   async assertCreator(voteId: string, creatorId: string) {
@@ -395,24 +380,68 @@ export class VoteService {
     return ended;
   }
 
-  async getVotes() {
-    const votes = await prisma.vote.findMany({
-      include: {
-        options: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    return votes;
-  }
-
-  async getVoteById(id: string) {
+  async getVoteById(id: string, viewer: VoteViewer) {
     const vote = await prisma.vote.findUnique({
       where: { id },
       include: {
         options: true,
       },
     });
-    return vote;
+
+    if (!vote) {
+      throw new AppError("Vote not found", 404);
+    }
+
+    const now = new Date();
+    const isCreator = viewer.id === vote.creatorId;
+    const isAdmin = viewer.role === "ADMIN";
+    const isModeB = vote.participationMode === "INVITE_ONLY";
+
+    let invite: { status: string; expiresAt: Date | null } | null = null;
+    let isInvitee = false;
+
+    if (isModeB && !isCreator && !isAdmin) {
+      invite = await prisma.voteInvite.findFirst({
+        where: { voteId: id, inviteeUserId: viewer.id },
+      });
+      isInvitee =
+        !!invite &&
+        invite.status !== "REMOVED" &&
+        (invite.expiresAt === null || invite.expiresAt.getTime() > now.getTime());
+      if (!isInvitee) {
+        throw new AppError("你不在本场受邀名单中", 403);
+      }
+    }
+
+    const phase = getVotePhase(vote, now);
+    const hasVoted = await this.hasUserVoted(viewer.id, vote.id);
+    const votedCount = await prisma.ballot.count({
+      where: { voteId: vote.id },
+    });
+    const eligibleCount = isModeB
+      ? await prisma.voteInvite.count({
+          where: { voteId: id, status: { not: "REMOVED" } },
+        })
+      : null;
+
+    const canVote =
+      phase === "LIVE" &&
+      !hasVoted &&
+      viewer.status === "APPROVED" &&
+      (vote.participationMode === "OPEN_LINK" || isCreator || invite?.status === "ACCEPTED");
+
+    return {
+      vote: {
+        ...vote,
+        phase,
+        votedCount,
+        eligibleCount,
+        hasVoted,
+        isInvitee,
+        isCreator,
+        canVote,
+      },
+    };
   }
 
   async submitVote(data: { userId: string; voteId: string; optionIds: string[] }) {
@@ -549,50 +578,94 @@ export class VoteService {
   }
 
   async getMyVotes(userId: string) {
+    const createdVotes = await prisma.vote.findMany({
+      where: { creatorId: userId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        title: true,
+        allowMultiple: true,
+        participationMode: true,
+        startAt: true,
+        endAt: true,
+        startedAt: true,
+        closedAt: true,
+        createdAt: true,
+      },
+    });
+
     const histories = await prisma.userVoteHistory.findMany({
       where: { userId },
-      orderBy: { votedAt: 'desc' },
+      orderBy: { votedAt: "desc" },
       include: {
         vote: {
           select: {
             id: true,
             title: true,
             allowMultiple: true,
+            participationMode: true,
             startAt: true,
             endAt: true,
+            startedAt: true,
+            closedAt: true,
+            createdAt: true,
           },
         },
       },
     });
 
-    if (histories.length === 0) return [];
+    const entries: Array<{ item: any; createdAt: Date }> = [];
 
-    // 一次取出这些投票的全部 ballot，按 (voteId, sequenceNumber) 对应，避免逐条查询
-    const ballots = await prisma.ballot.findMany({
-      where: { voteId: { in: histories.map((h) => h.voteId) } },
-      select: {
-        voteId: true,
-        sequenceNumber: true,
-        pseudonym: true,
-        submittedAt: true,
-      },
-    });
-    const ballotMap = new Map(
-      ballots.map((b) => [`${b.voteId}:${b.sequenceNumber}`, b])
-    );
+    for (const vote of createdVotes) {
+      entries.push({ createdAt: vote.createdAt, item: await this.buildMyVoteItem(vote, "CREATOR") });
+    }
 
-    return histories.map((h) => {
-      const ballot = ballotMap.get(`${h.voteId}:${h.ballotSequenceNumber}`);
-      return {
-        voteId: h.voteId,
-        voteTitle: h.vote.title,
-        allowMultiple: h.vote.allowMultiple,
-        startAt: h.vote.startAt,
-        endAt: h.vote.endAt,
-        pseudonym: ballot?.pseudonym ?? null,
-        submittedAt: ballot?.submittedAt ?? h.votedAt,
-        sequenceNumber: h.ballotSequenceNumber,
-      };
+    for (const history of histories) {
+      entries.push({ createdAt: history.vote.createdAt, item: await this.buildMyVoteItem(history.vote, "PARTICIPANT", history) });
+    }
+
+    entries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    return entries.map((entry) => entry.item);
+  }
+
+  private async buildMyVoteItem(
+    vote: any,
+    relation: "CREATOR" | "PARTICIPANT",
+    history?: any
+  ) {
+    const phase = getVotePhase(vote);
+    const votedCount = await prisma.ballot.count({
+      where: { voteId: vote.id },
     });
+    const eligibleCount = vote.participationMode === "INVITE_ONLY"
+      ? await prisma.voteInvite.count({
+          where: { voteId: vote.id, status: { not: "REMOVED" } },
+        })
+      : null;
+
+    const item: any = {
+      voteId: vote.id,
+      voteTitle: vote.title,
+      participationMode: vote.participationMode,
+      phase,
+      allowMultiple: vote.allowMultiple,
+      startAt: vote.startAt,
+      endAt: vote.endAt,
+      votedCount,
+      eligibleCount,
+      relation,
+    };
+
+    if (relation === "PARTICIPANT") {
+      const ballot = await prisma.ballot.findFirst({
+        where: { voteId: vote.id, sequenceNumber: history?.ballotSequenceNumber ?? 0 },
+      });
+      item.pseudonym = ballot?.pseudonym ?? null;
+      item.submittedAt = ballot?.submittedAt ?? history?.votedAt ?? null;
+      item.sequenceNumber = history?.ballotSequenceNumber ?? null;
+    }
+
+    return item;
   }
 }
