@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { AuthService } from "./auth.service";
+import { AuthService, toPublicUser } from "./auth.service";
 import { AuthRequest } from "../../middleware/auth.middleware";
 import { messageOf, statusCodeOf } from "../../utils/errors";
 
@@ -8,9 +8,6 @@ const authService = new AuthService();
 export class AuthController {
   async register(req: Request, res: Response) {
     try {
-      const files = req.files as Express.Multer.File[];
-      const idCardImages = files?.map((f) => f.path) || [];
-
       const { realName, idNumber, username, password } = req.body;
 
       const result = await authService.register({
@@ -18,7 +15,7 @@ export class AuthController {
         password,
         realName,
         idNumber,
-        idCardImages,
+        ip: req.ip,
       });
 
       res.status(201).json(result);
@@ -36,12 +33,30 @@ export class AuthController {
     }
   }
 
+  async reverify(req: AuthRequest, res: Response) {
+    try {
+      const { realName, idNumber } = req.body;
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const result = await authService.reverifyIdentity(user.id, {
+        realName,
+        idNumber,
+        ip: req.ip,
+      });
+
+      res.json(result);
+    } catch (error: any) {
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
+    }
+  }
+
   async me(req: AuthRequest, res: Response) {
     const user = req.user;
     if (user) {
-      const { password, idNumber, idNumberHash, idCardImages, ...safeUser } =
-        user as any;
-      res.json({ user: safeUser });
+      res.json({ user: toPublicUser(user) });
     } else {
       res.json({ user: user });
     }

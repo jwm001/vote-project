@@ -30,3 +30,13 @@ export function hashIdNumber(rawIdNumber: string): string {
   const normalized = normalizeIdNumber(rawIdNumber);
   return crypto.createHmac("sha256", hashKey()).update(normalized).digest("hex");
 }
+
+const ID_NUMBER_PATTERN = /^\d{17}[\dX]$/;
+
+/**
+ * 身份证号格式校验：仅支持 18 位大陆居民身份证（末位为数字或 X）。
+ * 校验发生在规范化之后，因此小写 x 会被归一为大写 X。
+ */
+export function isValidIdNumber(rawIdNumber: string): boolean {
+  return ID_NUMBER_PATTERN.test(normalizeIdNumber(rawIdNumber));
+}
