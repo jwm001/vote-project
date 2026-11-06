@@ -4,6 +4,7 @@ import cors from "cors";
 import authRoutes from "./modules/auth/auth.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 import voteRoutes from "./modules/vote/vote.routes";
+import inviteRoutes from "./modules/vote/invite.routes";
 import auditRoutes from "./modules/audit/audit.routes";
 
 export function createApp() {
@@ -20,6 +21,7 @@ export function createApp() {
   app.use("/api/auth", authRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/votes", voteRoutes);
+  app.use("/api/invites", inviteRoutes);
 
   return app;
 }
