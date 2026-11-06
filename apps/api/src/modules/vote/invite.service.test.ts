@@ -644,6 +644,26 @@ describe("InviteService.startVote", () => {
     expect(getVotePhase(started)).toBe("LIVE");
   });
 
+  it("starts a mode B vote even after its placeholder endAt has passed", async () => {
+    const creator = await makeUser("creator");
+    const bob = await makeUser("bob");
+    const vote = await makeModeBVote(creator.id, 30);
+    await prisma.vote.update({
+      where: { id: vote.id },
+      data: { endAt: new Date(Date.now() - 60_000) },
+    });
+    await inviteService.createUsernameInvites(vote.id, creator.id, ["bob"]);
+    const invite = await inviteFor(vote.id, bob.id);
+    await inviteService.acceptInviteById(invite.id, bob);
+
+    const stale = await prisma.vote.findUniqueOrThrow({ where: { id: vote.id } });
+    expect(getVotePhase(stale)).toBe("DRAFT");
+
+    const started = await inviteService.startVote(vote.id, creator.id);
+    expect(getVotePhase(started)).toBe("LIVE");
+    expect(started.endAt.getTime()).toBe(started.startAt.getTime() + 30 * 60_000);
+  });
+
   it("requires at least one accepted invitee", async () => {
     const creator = await makeUser("creator");
     const bob = await makeUser("bob");

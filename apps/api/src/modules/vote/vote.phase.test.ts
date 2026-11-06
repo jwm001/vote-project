@@ -35,6 +35,28 @@ describe("getVotePhase", () => {
     ).toBe("ENDED");
   });
 
+  it("ignores the placeholder endAt while an INVITE_ONLY vote has not started", () => {
+    expect(
+      getVotePhase({
+        participationMode: "INVITE_ONLY",
+        startedAt: null,
+        endAt: new Date(Date.now() - 60_000),
+        closedAt: null,
+      })
+    ).toBe("DRAFT");
+  });
+
+  it("returns ENDED for an INVITE_ONLY draft that was explicitly closed", () => {
+    expect(
+      getVotePhase({
+        participationMode: "INVITE_ONLY",
+        startedAt: null,
+        endAt: new Date(Date.now() + 60_000),
+        closedAt: new Date(),
+      })
+    ).toBe("ENDED");
+  });
+
   it("returns ENDED when the vote was closed even before endAt", () => {
     expect(
       getVotePhase({
