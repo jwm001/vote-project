@@ -407,7 +407,9 @@ export class VoteService {
       isInvitee =
         !!invite &&
         invite.status !== "REMOVED" &&
-        (invite.expiresAt === null || invite.expiresAt.getTime() > now.getTime());
+        (invite.status === "ACCEPTED" ||
+          invite.expiresAt === null ||
+          invite.expiresAt.getTime() > now.getTime());
     }
 
     if (isModeB && !isInvitee && !isCreator && !isAdmin) {
@@ -456,11 +458,27 @@ export class VoteService {
     }
 
     const now = new Date();
-    if (now < vote.startAt) {
+    const phase = getVotePhase(vote, now);
+    if (phase === "DRAFT") {
       throw new AppError("投票尚未开始", 409);
     }
-    if (now > vote.endAt) {
+    if (phase === "ENDED") {
       throw new AppError("投票已结束", 409);
+    }
+
+    // ---- 模式 B：必须先接受邀请 ----
+    if (vote.participationMode === "INVITE_ONLY") {
+      const invite = await prisma.voteInvite.findFirst({
+        where: {
+          voteId: data.voteId,
+          inviteeUserId: data.userId,
+          status: "ACCEPTED",
+        },
+        select: { id: true },
+      });
+      if (!invite) {
+        throw new AppError("请先接受邀请或不在名单中", 403);
+      }
     }
 
     // ---- 选项校验：归属、单选、去重 ----
@@ -478,6 +496,12 @@ export class VoteService {
     const foreign = optionIds.filter((id) => !ownOptionIds.has(id));
     if (foreign.length > 0) {
       throw new AppError("存在不属于本场投票的选项", 400);
+    }
+
+    // ---- 弃权互斥：弃权只能单独选择 ----
+    const abstain = vote.options.find((option) => option.isAbstain);
+    if (abstain && optionIds.includes(abstain.id) && optionIds.length > 1) {
+      throw new AppError("弃权不能与其他选项同时选择", 400);
     }
 
     if (!vote.allowMultiple && optionIds.length !== 1) {
@@ -505,7 +529,7 @@ export class VoteService {
     // 命中冲突就重试，而不是在事务外「查最后一条 +1」。
     for (let attempt = 0; attempt < MAX_SEQUENCE_RETRIES; attempt++) {
       try {
-        return await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(async (tx) => {
           const lastBallot = await tx.ballot.findFirst({
             where: { voteId: data.voteId },
             orderBy: { sequenceNumber: "desc" },
@@ -536,6 +560,12 @@ export class VoteService {
             sequenceNumber,
           };
         });
+
+        if (vote.participationMode === "INVITE_ONLY") {
+          await this.maybeAutoEnd(data.voteId);
+        }
+
+        return result;
       } catch (error: any) {
         if (isDuplicateVote(error) && !isSequenceConflict(error)) {
           throw new AppError("你已参与过本场投票", 409);
@@ -552,6 +582,49 @@ export class VoteService {
     }
 
     throw new AppError("投票提交冲突，请重试", 409);
+  }
+
+  /**
+   * 模式 B 可选自动结束：所有「已绑定用户且未移除」的受邀人都投票后关闭投票。
+   * 未接受的一人一链接（inviteeUserId = null）不阻塞；未接受的用户名邀请会阻塞。
+   * 事务已成功提交，自动结束失败不能影响投票结果。
+   */
+  private async maybeAutoEnd(voteId: string) {
+    try {
+      const invites = await prisma.voteInvite.findMany({
+        where: {
+          voteId,
+          inviteeUserId: { not: null },
+          status: { not: "REMOVED" },
+        },
+        select: { inviteeUserId: true },
+      });
+
+      const inviteeIds = [
+        ...new Set(
+          invites
+            .map((invite) => invite.inviteeUserId)
+            .filter((id): id is string => id !== null)
+        ),
+      ];
+      if (inviteeIds.length === 0) {
+        return;
+      }
+
+      const votedCount = await prisma.userVoteHistory.count({
+        where: { voteId, userId: { in: inviteeIds } },
+      });
+      if (votedCount < inviteeIds.length) {
+        return;
+      }
+
+      await prisma.vote.updateMany({
+        where: { id: voteId, closedAt: null },
+        data: { closedAt: new Date() },
+      });
+    } catch {
+      // 自动结束是尽力而为，不能因为关闭失败让已写入的投票返回错误。
+    }
   }
 
   async hasUserVoted(userId: string, voteId: string): Promise<boolean> {

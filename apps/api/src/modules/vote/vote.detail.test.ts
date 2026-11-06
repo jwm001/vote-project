@@ -183,7 +183,7 @@ describe("VoteService.getVoteById", () => {
     expect(detail.vote.canVote).toBe(true);
   });
 
-  it("throws 403 for an expired mode B invite", async () => {
+  it("allows an accepted invite past expiresAt but rejects an expired unaccepted invite", async () => {
     const creator = await makeUser("creator");
     const invitee = await makeUser("invitee");
     const vote = await voteService.createVote({
@@ -199,7 +199,25 @@ describe("VoteService.getVoteById", () => {
     });
     await prisma.vote.update({ where: { id: vote.id }, data: { startedAt: new Date() } });
 
-    await expect(voteService.getVoteById(vote.id, viewerOf(invitee))).rejects.toMatchObject({ status: 403 });
+    const acceptedDetail = await voteService.getVoteById(vote.id, viewerOf(invitee));
+    expect(acceptedDetail.vote.isInvitee).toBe(true);
+    expect(acceptedDetail.vote.canVote).toBe(true);
+
+    const pending = await makeUser("pending");
+    const pendingVote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T2",
+      participationMode: "INVITE_ONLY",
+      allowMultiple: false,
+      durationMinutes: 60,
+      options: ["A", "B"],
+    });
+    await prisma.voteInvite.create({
+      data: { voteId: pendingVote.id, inviteeUserId: pending.id, status: "INVITED", expiresAt: new Date(Date.now() - 60_000) },
+    });
+    await prisma.vote.update({ where: { id: pendingVote.id }, data: { startedAt: new Date() } });
+
+    await expect(voteService.getVoteById(pendingVote.id, viewerOf(pending))).rejects.toMatchObject({ status: 403 });
   });
 
   it("returns the ENDED phase and disables canVote for an ended vote", async () => {
