@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { VoteService } from "./vote.service";
+import { AppError } from "../../utils/errors";
 import { prisma } from "../../utils/prisma";
 import { resetDb } from "../../test/db";
 import { resetRateLimits } from "../../utils/rate-limit";
@@ -82,12 +83,15 @@ describe("VoteService.getVoteById", () => {
       options: ["A", "B"],
     });
 
-    await expect(voteService.getVoteById(vote.id, viewerOf(stranger))).rejects.toMatchObject({
-      status: 403,
-    });
-    await expect(voteService.getVoteById(vote.id, viewerOf(stranger))).rejects.toThrow(
-      "你不在本场受邀名单中"
-    );
+    const error = await voteService
+      .getVoteById(vote.id, viewerOf(stranger))
+      .then(
+        () => null,
+        (e: any) => e
+      );
+    expect(error).toBeInstanceOf(AppError);
+    expect(error.status).toBe(403);
+    expect(error.message).toBe("你不在本场受邀名单中");
   });
 
   it("lets an unaccepted mode B invitee view but not vote", async () => {
@@ -135,6 +139,85 @@ describe("VoteService.getVoteById", () => {
     expect(detail.vote.phase).toBe("LIVE");
     expect(detail.vote.isInvitee).toBe(true);
     expect(detail.vote.canVote).toBe(true);
+  });
+
+  it("rejects a live mode B creator without a valid invite from voting", async () => {
+    const creator = await makeUser("creator");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "INVITE_ONLY",
+      allowMultiple: false,
+      durationMinutes: 60,
+      options: ["A", "B"],
+    });
+    await prisma.vote.update({ where: { id: vote.id }, data: { startedAt: new Date() } });
+
+    const detail = await voteService.getVoteById(vote.id, viewerOf(creator));
+
+    expect(detail.vote.phase).toBe("LIVE");
+    expect(detail.vote.isInvitee).toBe(false);
+    expect(detail.vote.isCreator).toBe(true);
+    expect(detail.vote.canVote).toBe(false);
+  });
+
+  it("lets a mode B creator who accepted their own invite vote once live", async () => {
+    const creator = await makeUser("creator");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "INVITE_ONLY",
+      allowMultiple: false,
+      durationMinutes: 60,
+      options: ["A", "B"],
+    });
+    await prisma.voteInvite.create({
+      data: { voteId: vote.id, inviteeUserId: creator.id, status: "ACCEPTED", acceptedAt: new Date() },
+    });
+    await prisma.vote.update({ where: { id: vote.id }, data: { startedAt: new Date() } });
+
+    const detail = await voteService.getVoteById(vote.id, viewerOf(creator));
+
+    expect(detail.vote.phase).toBe("LIVE");
+    expect(detail.vote.isInvitee).toBe(true);
+    expect(detail.vote.canVote).toBe(true);
+  });
+
+  it("throws 403 for an expired mode B invite", async () => {
+    const creator = await makeUser("creator");
+    const invitee = await makeUser("invitee");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "INVITE_ONLY",
+      allowMultiple: false,
+      durationMinutes: 60,
+      options: ["A", "B"],
+    });
+    await prisma.voteInvite.create({
+      data: { voteId: vote.id, inviteeUserId: invitee.id, status: "ACCEPTED", acceptedAt: new Date(), expiresAt: new Date(Date.now() - 60_000) },
+    });
+    await prisma.vote.update({ where: { id: vote.id }, data: { startedAt: new Date() } });
+
+    await expect(voteService.getVoteById(vote.id, viewerOf(invitee))).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("returns the ENDED phase and disables canVote for an ended vote", async () => {
+    const creator = await makeUser("creator");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "OPEN_LINK",
+      allowMultiple: false,
+      endAt: new Date(Date.now() + 86_400_000),
+      options: ["A", "B"],
+    });
+    await prisma.vote.update({ where: { id: vote.id }, data: { closedAt: new Date() } });
+
+    const detail = await voteService.getVoteById(vote.id, viewerOf(creator));
+
+    expect(detail.vote.phase).toBe("ENDED");
+    expect(detail.vote.canVote).toBe(false);
   });
 
   it("disables canVote for an approved user without an accepted invite and for a non-approved accepted invitee", async () => {
@@ -299,14 +382,53 @@ describe("VoteService.getMyVotes", () => {
     const mine = await voteService.getMyVotes(x.id);
 
     expect(mine).toHaveLength(2);
-    expect(mine[0].relation).toBe("CREATOR");
-    expect(mine[0].voteId).toBe(newVote.id);
-    expect(mine[1].relation).toBe("PARTICIPANT");
-    expect(mine[1].voteId).toBe(oldVote.id);
+    expect(mine[0].relation).toBe("PARTICIPANT");
+    expect(mine[0].voteId).toBe(oldVote.id);
+    expect(mine[1].relation).toBe("CREATOR");
+    expect(mine[1].voteId).toBe(newVote.id);
   });
 
   it("returns an empty list when the user has no votes", async () => {
     const user = await makeUser("nobody");
     expect(await voteService.getMyVotes(user.id)).toEqual([]);
+  });
+
+  it("sorts participant items by participation time descending", async () => {
+    const y = await makeUser("y");
+    const x = await makeUser("x");
+    const older = await voteService.createVote({
+      creatorId: y.id,
+      title: "Older",
+      participationMode: "OPEN_LINK",
+      allowMultiple: false,
+      endAt: new Date(Date.now() + 86_400_000),
+      options: ["A", "B"],
+    });
+    const newer = await voteService.createVote({
+      creatorId: y.id,
+      title: "Newer",
+      participationMode: "OPEN_LINK",
+      allowMultiple: false,
+      endAt: new Date(Date.now() + 86_400_000),
+      options: ["A", "B"],
+    });
+
+    for (const vote of [older, newer]) {
+      const option = await prisma.option.findFirstOrThrow({ where: { voteId: vote.id, isAbstain: false } });
+      await prisma.ballot.create({
+        data: { voteId: vote.id, pseudonym: "user_x", optionIds: JSON.stringify([option.id]), sequenceNumber: 1 },
+      });
+      await prisma.userVoteHistory.create({
+        data: { userId: x.id, voteId: vote.id, ballotSequenceNumber: 1 },
+      });
+    }
+
+    const mine = await voteService.getMyVotes(x.id);
+
+    expect(mine).toHaveLength(2);
+    expect(mine[0].relation).toBe("PARTICIPANT");
+    expect(mine[0].voteId).toBe(newer.id);
+    expect(mine[1].relation).toBe("PARTICIPANT");
+    expect(mine[1].voteId).toBe(older.id);
   });
 });
