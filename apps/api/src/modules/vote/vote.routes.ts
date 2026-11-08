@@ -51,6 +51,9 @@ router.post(
   inviteController.start.bind(inviteController)
 );
 
+router.get("/:id/results", authMiddleware, voteController.results.bind(voteController));
+router.get("/:id/roster", authMiddleware, voteController.roster.bind(voteController));
+
 router.post("/:id/submit", authMiddleware, verifiedMiddleware, voteController.submit.bind(voteController));
 router.patch("/:id", authMiddleware, verifiedMiddleware, voteController.update.bind(voteController));
 router.delete("/:id", authMiddleware, verifiedMiddleware, voteController.remove.bind(voteController));

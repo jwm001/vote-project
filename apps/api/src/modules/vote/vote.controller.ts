@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { VoteService } from "./vote.service";
+import { getResults, getRoster } from "./vote.results";
 import { AuthRequest } from "../../middleware/auth.middleware";
 import { messageOf, statusCodeOf } from "../../utils/errors";
 
@@ -133,6 +134,34 @@ export class VoteController {
       });
 
       res.status(201).json(result);
+    } catch (error: any) {
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
+    }
+  }
+
+  async results(req: AuthRequest, res: Response) {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const result = await getResults(req.params.id, user);
+      res.json(result);
+    } catch (error: any) {
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
+    }
+  }
+
+  async roster(req: AuthRequest, res: Response) {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const result = await getRoster(req.params.id, user);
+      res.json(result);
     } catch (error: any) {
       res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
