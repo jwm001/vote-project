@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import crypto from "crypto";
 import { auditService, shouldRedactOptions } from "./audit.service";
 import { VoteService } from "../vote/vote.service";
 import { AppError } from "../../utils/errors";
@@ -94,6 +95,59 @@ async function addBallot(voteId: string, userId: string, sequenceNumber = 1) {
   });
 }
 
+/**
+ * Independent copy of the version-1 canonical payload. Kept in the test on
+ * purpose: if the production format changes, old sealed hashes stop matching
+ * and this test is the tripwire.
+ */
+function legacyDigest(
+  vote: {
+    id: string;
+    title: string;
+    description: string | null;
+    creatorId: string;
+    allowMultiple: boolean;
+    startAt: Date;
+    endAt: Date;
+    options: { id: string; text: string; order: number }[];
+  },
+  ballots: {
+    sequenceNumber: number;
+    pseudonym: string;
+    optionIds: string;
+    submittedAt: Date;
+  }[]
+): string {
+  const payload = JSON.stringify({
+    version: 1,
+    vote: {
+      id: vote.id,
+      title: vote.title,
+      description: vote.description ?? null,
+      creatorId: vote.creatorId,
+      allowMultiple: vote.allowMultiple,
+      startAt: vote.startAt.toISOString(),
+      endAt: vote.endAt.toISOString(),
+      options: [...vote.options]
+        .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+        .map((option) => ({
+          id: option.id,
+          text: option.text,
+          order: option.order,
+        })),
+    },
+    ballots: [...ballots]
+      .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+      .map((ballot) => ({
+        sequenceNumber: ballot.sequenceNumber,
+        pseudonym: ballot.pseudonym,
+        optionIds: JSON.parse(ballot.optionIds),
+        submittedAt: ballot.submittedAt.toISOString(),
+      })),
+  });
+  return crypto.createHash("sha256").update(payload).digest("hex");
+}
+
 async function expectAppError(promise: Promise<unknown>, status: number) {
   const error = await promise.then(
     () => null,
@@ -187,28 +241,70 @@ describe("Mode A PDF access", () => {
     );
   });
 
-  it("reports match on a later export of the same sealed records", async () => {
+  it("matches a pre-existing sealed digest computed with the legacy format", async () => {
     const creator = await makeUser("creator");
     const vote = await makeModeAVote(creator.id);
     await addBallot(vote.id, creator.id);
     await endVote(vote.id);
 
-    const sealed = await auditService.generateAuditPdf(
-      vote.id,
-      viewerOf(creator)
-    );
-    expect(sealed.integrity).toBe("sealed");
+    const stored = await prisma.vote.findUniqueOrThrow({
+      where: { id: vote.id },
+      include: { options: true, ballots: true },
+    });
+    const expected = legacyDigest(stored, stored.ballots);
+    await prisma.vote.update({
+      where: { id: vote.id },
+      data: { auditHash: expected, auditRecordedAt: new Date() },
+    });
 
-    const second = await auditService.generateAuditPdf(
+    const result = await auditService.generateAuditPdf(
       vote.id,
       viewerOf(creator)
     );
-    expect(second.integrity).toBe("match");
-    expect(second.digest).toBe(sealed.digest);
+    expect(result.integrity).toBe("match");
+    expect(result.digest).toBe(expected);
+    expect(result.recordedDigest).toBe(expected);
   });
 });
 
 describe("Mode B PDF access", () => {
+  it("rejects an accepted invitee while the vote is still DRAFT", async () => {
+    const creator = await makeUser("creator");
+    const invitee = await makeUser("invitee");
+    const vote = await makeModeBVote(creator.id);
+    await addInvite(vote.id, invitee.id, "ACCEPTED");
+
+    await expectAppError(
+      auditService.generateAuditPdf(vote.id, viewerOf(invitee)),
+      403
+    );
+  });
+
+  it("rejects a non-invitee while the vote is LIVE", async () => {
+    const creator = await makeUser("creator");
+    const stranger = await makeUser("stranger");
+    const vote = await makeModeBVote(creator.id);
+    await startModeB(vote.id);
+
+    await expectAppError(
+      auditService.generateAuditPdf(vote.id, viewerOf(stranger)),
+      403
+    );
+  });
+
+  it("rejects an invitee who has not accepted yet", async () => {
+    const creator = await makeUser("creator");
+    const invitee = await makeUser("invitee");
+    const vote = await makeModeBVote(creator.id);
+    await addInvite(vote.id, invitee.id, "INVITED");
+    await startModeB(vote.id);
+
+    await expectAppError(
+      auditService.generateAuditPdf(vote.id, viewerOf(invitee)),
+      403
+    );
+  });
+
   it("rejects a non-invitee even after the vote ended", async () => {
     const creator = await makeUser("creator");
     const stranger = await makeUser("stranger");
