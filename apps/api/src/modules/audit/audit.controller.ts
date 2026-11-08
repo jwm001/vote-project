@@ -25,6 +25,7 @@ export const auditController = {
       );
       res.setHeader("X-Audit-Digest", result.digest);
       res.setHeader("X-Audit-Integrity", result.integrity);
+      res.setHeader("X-Audit-Redacted", String(result.redacted));
       if (result.recordedDigest) {
         res.setHeader("X-Audit-Sealed-Digest", result.recordedDigest);
       }
