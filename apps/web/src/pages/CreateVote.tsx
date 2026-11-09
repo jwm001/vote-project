@@ -22,6 +22,7 @@ interface FormState {
 type FieldKey = 'title' | 'endAt' | 'duration' | 'options';
 
 const ABSTAIN_TEXT = '弃权';
+// 与后端 vote.constants.ts 的 MAX_DURATION_MINUTES 保持一致。
 const MAX_DURATION_MINUTES = 43_200;
 
 const pad = (value: number) => String(value).padStart(2, '0');
@@ -63,7 +64,11 @@ function formatDuration(value: number, unit: DurationUnit) {
 }
 
 function durationToMinutes(value: number, unit: DurationUnit) {
-  return value * (unit === 'hours' ? 60 : 1440);
+  const minutes = value * (unit === 'hours' ? 60 : 1440);
+  // 1.1 天这类输入会得到 1584.0000000000002，浮点误差不该算成「非整数分钟」。
+  return Math.abs(minutes - Math.round(minutes)) < 1e-6
+    ? Math.round(minutes)
+    : minutes;
 }
 
 export default function CreateVote() {
@@ -144,17 +149,20 @@ export default function CreateVote() {
     if (form.participationMode === 'OPEN_LINK') {
       if (!form.endAt) {
         next.endAt = '请选择结束时间';
-      } else if (new Date(form.endAt).getTime() <= Date.now()) {
-        next.endAt = '结束时间必须晚于现在';
+      } else {
+        const endTime = new Date(form.endAt).getTime();
+        if (Number.isNaN(endTime) || endTime <= Date.now()) {
+          next.endAt = '结束时间必须晚于现在';
+        }
       }
     } else {
       const minutes = durationToMinutes(form.durationValue, form.durationUnit);
       if (!form.durationValue || form.durationValue <= 0) {
         next.duration = '请填写投票时长';
       } else if (!Number.isInteger(minutes)) {
-        next.duration = '时长换算成分钟后必须是整数';
+        next.duration = '时长必须能换算成整数分钟';
       } else if (minutes > MAX_DURATION_MINUTES) {
-        next.duration = '时长不能超过 30 天';
+        next.duration = '时长不能超过 30 天（720 小时）';
       }
     }
 
