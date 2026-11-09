@@ -149,6 +149,48 @@
   gap: 0.8rem;
 }
 
+.cv-duration {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.cv-duration select {
+  width: auto;
+  min-width: 96px;
+}
+
+.cv-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-top: 1rem;
+  padding: 0.7rem 0.85rem;
+  background: #f8f9ff;
+  border: 1px solid rgba(102, 126, 234, 0.18);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+}
+
+.cv-toggle input {
+  width: auto;
+  margin-top: 0.2rem;
+  accent-color: #667eea;
+  flex: 0 0 auto;
+}
+
+.cv-toggle-note {
+  display: block;
+  margin-top: 0.15rem;
+  color: #888;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
 /* ---------- segmented control ---------- */
 
 .cv-segmented {
@@ -227,6 +269,32 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.cv-option-num--muted {
+  background: #eceef7;
+  color: #8a8fa8;
+}
+
+.cv-option-row--locked {
+  background: #fafbff;
+  border-style: dashed;
+}
+
+.cv-option-row--locked .cv-option-input {
+  color: #555;
+  cursor: default;
+}
+
+.cv-lock-badge {
+  flex: 0 0 auto;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #f0f1ff;
+  color: #667eea;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .cv-option-input {
@@ -468,6 +536,11 @@
   font-size: 0.7rem;
 }
 
+.cv-preview-option--locked {
+  color: #8a8fa8;
+  border-style: dashed;
+}
+
 .cv-tips {
   list-style: none;
   padding: 0;
@@ -510,6 +583,14 @@
   .cv-dates {
     grid-template-columns: 1fr;
     gap: 0;
+  }
+
+  .cv-duration {
+    grid-template-columns: 1fr;
+  }
+
+  .cv-duration select {
+    width: 100%;
   }
 
   .cv-actions {

@@ -1,18 +1,28 @@
 import { useMemo, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api, ApiError } from '../api';
 import './CreateVote.css';
+
+type ParticipationMode = 'OPEN_LINK' | 'INVITE_ONLY';
+type DurationUnit = 'hours' | 'days';
 
 interface FormState {
   title: string;
   description: string;
   allowMultiple: boolean;
-  startAt: string;
+  participationMode: ParticipationMode;
+  resultsPublicDuringVote: boolean;
   endAt: string;
+  durationValue: number;
+  durationUnit: DurationUnit;
   options: string[];
 }
 
-type FieldKey = 'title' | 'startAt' | 'endAt' | 'options';
+type FieldKey = 'title' | 'endAt' | 'duration' | 'options';
+
+const ABSTAIN_TEXT = '弃权';
+const MAX_DURATION_MINUTES = 43_200;
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
@@ -21,33 +31,39 @@ function toLocalInput(date: Date) {
 }
 
 function createInitialForm(): FormState {
-  const start = new Date();
-  const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const end = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   return {
     title: '',
     description: '',
     allowMultiple: false,
-    startAt: toLocalInput(start),
+    participationMode: 'OPEN_LINK',
+    resultsPublicDuringVote: false,
     endAt: toLocalInput(end),
+    durationValue: 7,
+    durationUnit: 'days',
     options: ['', ''],
   };
 }
 
-function formatRange(startAt: string, endAt: string) {
-  const parse = (value: string) => {
-    if (!value) return null;
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
-  };
-  const format = (date: Date) =>
-    date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+function formatEndAt(value: string) {
+  if (!value) return '尚未设置结束时间';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '尚未设置结束时间';
+  return `截至 ${date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
+}
 
-  const start = parse(startAt);
-  const end = parse(endAt);
-  if (start && end) return `${format(start)} — ${format(end)}`;
-  if (start) return `${format(start)} 起`;
-  if (end) return `截至 ${format(end)}`;
-  return '尚未设置时间';
+function formatDuration(value: number, unit: DurationUnit) {
+  if (!value || value <= 0) return '尚未设置时长';
+  return `时长 ${value} ${unit === 'hours' ? '小时' : '天'}`;
+}
+
+function durationToMinutes(value: number, unit: DurationUnit) {
+  return value * (unit === 'hours' ? 60 : 1440);
 }
 
 export default function CreateVote() {
@@ -124,16 +140,32 @@ export default function CreateVote() {
   const validate = () => {
     const next: Partial<Record<FieldKey, string>> = {};
     if (!form.title.trim()) next.title = '请填写投票标题';
-    if (!form.startAt) next.startAt = '请选择开始时间';
-    if (!form.endAt) next.endAt = '请选择结束时间';
-    if (form.startAt && form.endAt && new Date(form.endAt) <= new Date(form.startAt)) {
-      next.endAt = '结束时间必须晚于开始时间';
+
+    if (form.participationMode === 'OPEN_LINK') {
+      if (!form.endAt) {
+        next.endAt = '请选择结束时间';
+      } else if (new Date(form.endAt).getTime() <= Date.now()) {
+        next.endAt = '结束时间必须晚于现在';
+      }
+    } else {
+      const minutes = durationToMinutes(form.durationValue, form.durationUnit);
+      if (!form.durationValue || form.durationValue <= 0) {
+        next.duration = '请填写投票时长';
+      } else if (!Number.isInteger(minutes)) {
+        next.duration = '时长换算成分钟后必须是整数';
+      } else if (minutes > MAX_DURATION_MINUTES) {
+        next.duration = '时长不能超过 30 天';
+      }
     }
+
     if (filledOptions.length < 2) {
       next.options = '至少需要填写 2 个选项';
     } else if (new Set(filledOptions).size !== filledOptions.length) {
       next.options = '选项内容不能重复';
+    } else if (filledOptions.includes(ABSTAIN_TEXT)) {
+      next.options = `选项不能命名为「${ABSTAIN_TEXT}」，系统会自动添加`;
     }
+
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -143,35 +175,37 @@ export default function CreateVote() {
     setServerError('');
     if (submitting) return;
 
-    const token = localStorage.getItem('token');
-    if (!token) {
-      navigate('/login');
+    if (!localStorage.getItem('token')) {
+      navigate('/login?redirect=/create');
       return;
     }
     if (!validate()) return;
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/votes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          title: form.title.trim(),
-          description: form.description.trim(),
-          allowMultiple: form.allowMultiple,
-          startAt: new Date(form.startAt).toISOString(),
-          endAt: new Date(form.endAt).toISOString(),
-          options: filledOptions,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        navigate(`/vote/${data.vote.id}`);
-        return;
+      const payload: Record<string, unknown> = {
+        title: form.title.trim(),
+        description: form.description.trim(),
+        allowMultiple: form.allowMultiple,
+        participationMode: form.participationMode,
+        resultsPublicDuringVote: form.resultsPublicDuringVote,
+        options: filledOptions,
+      };
+      if (form.participationMode === 'OPEN_LINK') {
+        payload.endAt = new Date(form.endAt).toISOString();
+      } else {
+        payload.durationMinutes = durationToMinutes(
+          form.durationValue,
+          form.durationUnit
+        );
       }
-      setServerError(data.error || '创建失败，请稍后重试');
-    } catch {
-      setServerError('网络异常，创建失败，请稍后重试');
+
+      const data = await api.post<{ vote: { id: string } }>('/api/votes', payload);
+      navigate(`/vote/${data.vote.id}`);
+    } catch (error) {
+      setServerError(
+        error instanceof ApiError ? error.message : '创建失败，请稍后重试'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -182,7 +216,7 @@ export default function CreateVote() {
       <header className="cv-head">
         <div className="cv-head-icon">📝</div>
         <h1 className="cv-title">创建新投票</h1>
-        <p className="cv-sub">填写投票信息，创建后生成匿名投票入口</p>
+        <p className="cv-sub">选择参与方式，创建后生成匿名投票入口</p>
       </header>
 
       <div className="cv-layout">
@@ -245,35 +279,42 @@ export default function CreateVote() {
           <section className="cv-section">
             <div className="cv-section-head">
               <span className="cv-step">2</span>
-              <h2 className="cv-section-title">投票时间</h2>
+              <h2 className="cv-section-title">参与方式</h2>
             </div>
 
-            <div className="cv-dates">
-              <div className="cv-field">
-                <label className="cv-label" htmlFor="cv-start">
-                  开始时间 <span className="cv-req">*</span>
-                </label>
-                <input
-                  id="cv-start"
-                  type="datetime-local"
-                  value={form.startAt}
-                  aria-required="true"
-                  aria-invalid={Boolean(errors.startAt)}
-                  onChange={event => {
-                    update('startAt', event.target.value);
-                    clearError('startAt');
-                    clearError('endAt');
-                  }}
-                />
-                {errors.startAt && (
-                  <div className="cv-field-foot">
-                    <span className="cv-error" role="alert">
-                      {errors.startAt}
-                    </span>
-                  </div>
-                )}
-              </div>
+            <div className="cv-segmented" role="group" aria-label="参与方式">
+              <button
+                type="button"
+                className={
+                  form.participationMode === 'OPEN_LINK'
+                    ? 'cv-seg cv-seg--active'
+                    : 'cv-seg'
+                }
+                aria-pressed={form.participationMode === 'OPEN_LINK'}
+                onClick={() => update('participationMode', 'OPEN_LINK')}
+              >
+                公开链接
+              </button>
+              <button
+                type="button"
+                className={
+                  form.participationMode === 'INVITE_ONLY'
+                    ? 'cv-seg cv-seg--active'
+                    : 'cv-seg'
+                }
+                aria-pressed={form.participationMode === 'INVITE_ONLY'}
+                onClick={() => update('participationMode', 'INVITE_ONLY')}
+              >
+                邀请制
+              </button>
+            </div>
+            <p className="cv-hint">
+              {form.participationMode === 'OPEN_LINK'
+                ? '创建后立即开始，任何登录用户打开链接都能投票。'
+                : '创建后先邀请参与者，再手动开始；只有受邀者能投票。'}
+            </p>
 
+            {form.participationMode === 'OPEN_LINK' ? (
               <div className="cv-field">
                 <label className="cv-label" htmlFor="cv-end">
                   结束时间 <span className="cv-req">*</span>
@@ -296,9 +337,71 @@ export default function CreateVote() {
                     </span>
                   </div>
                 )}
+                <p className="cv-hint">
+                  创建即开始；按你所在时区填写，系统统一以 UTC 存储。创建者可提前结束。
+                </p>
               </div>
-            </div>
-            <p className="cv-hint">按你所在时区填写，系统统一以 UTC 存储。</p>
+            ) : (
+              <div className="cv-field">
+                <label className="cv-label" htmlFor="cv-duration">
+                  投票时长 <span className="cv-req">*</span>
+                </label>
+                <div className="cv-duration">
+                  <input
+                    id="cv-duration"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={form.durationValue === 0 ? '' : form.durationValue}
+                    aria-required="true"
+                    aria-invalid={Boolean(errors.duration)}
+                    onChange={event => {
+                      update(
+                        'durationValue',
+                        event.target.value === '' ? 0 : Number(event.target.value)
+                      );
+                      clearError('duration');
+                    }}
+                  />
+                  <select
+                    aria-label="时长单位"
+                    value={form.durationUnit}
+                    onChange={event =>
+                      update('durationUnit', event.target.value as DurationUnit)
+                    }
+                  >
+                    <option value="hours">小时</option>
+                    <option value="days">天</option>
+                  </select>
+                </div>
+                {errors.duration && (
+                  <div className="cv-field-foot">
+                    <span className="cv-error" role="alert">
+                      {errors.duration}
+                    </span>
+                  </div>
+                )}
+                <p className="cv-hint">
+                  时长从你手动开始投票时计算，最长 30 天。
+                </p>
+              </div>
+            )}
+
+            <label className="cv-toggle">
+              <input
+                type="checkbox"
+                checked={form.resultsPublicDuringVote}
+                onChange={event =>
+                  update('resultsPublicDuringVote', event.target.checked)
+                }
+              />
+              <span>
+                <strong>实时公开结果</strong>
+                <span className="cv-toggle-note">
+                  默认关闭；进行中只显示已投人数。开始后不可更改。
+                </span>
+              </span>
+            </label>
           </section>
 
           <section className="cv-section">
@@ -326,7 +429,9 @@ export default function CreateVote() {
               </button>
             </div>
             <p className="cv-hint">
-              {form.allowMultiple ? '投票者可以选择多个选项' : '每位投票者只能选择 1 个选项'}
+              {form.allowMultiple
+                ? '投票者可以选择多个选项'
+                : '每位投票者只能选择 1 个选项'}
             </p>
           </section>
 
@@ -385,6 +490,19 @@ export default function CreateVote() {
                   </div>
                 </div>
               ))}
+
+              <div className="cv-option-row cv-option-row--locked">
+                <span className="cv-option-num cv-option-num--muted">
+                  {form.options.length + 1}
+                </span>
+                <input
+                  className="cv-option-input"
+                  value={ABSTAIN_TEXT}
+                  readOnly
+                  aria-label={`${ABSTAIN_TEXT}（系统自动添加）`}
+                />
+                <span className="cv-lock-badge">系统自动添加</span>
+              </div>
             </div>
 
             <button type="button" className="cv-add" onClick={addOption}>
@@ -398,7 +516,9 @@ export default function CreateVote() {
                 </span>
               </div>
             ) : (
-              <p className="cv-hint">至少 2 个；按此顺序展示；悬停可调整顺序或删除，回车可继续添加</p>
+              <p className="cv-hint">
+                至少 2 个；按此顺序展示；悬停可调整顺序或删除，回车可继续添加。弃权固定排在最后，并计入票数。
+              </p>
             )}
           </section>
 
@@ -409,7 +529,7 @@ export default function CreateVote() {
           )}
 
           <div className="cv-actions">
-            <button type="button" className="cv-btn-ghost" onClick={() => navigate('/votes')}>
+            <button type="button" className="cv-btn-ghost" onClick={() => navigate('/')}>
               取消
             </button>
             <button type="submit" className="cv-btn-primary" disabled={submitting}>
@@ -425,10 +545,20 @@ export default function CreateVote() {
           </div>
           <div className="cv-preview-card">
             <h3 className="cv-preview-title">{form.title.trim() || '未命名投票'}</h3>
-            {form.description.trim() && <p className="cv-preview-desc">{form.description.trim()}</p>}
+            {form.description.trim() && (
+              <p className="cv-preview-desc">{form.description.trim()}</p>
+            )}
             <div className="cv-preview-meta">
+              <span className="cv-pill">
+                {form.participationMode === 'OPEN_LINK' ? '公开链接' : '邀请制'}
+              </span>
               <span className="cv-pill">{form.allowMultiple ? '多选' : '单选'}</span>
-              <span>🕐 {formatRange(form.startAt, form.endAt)}</span>
+              <span>
+                🕐{' '}
+                {form.participationMode === 'OPEN_LINK'
+                  ? formatEndAt(form.endAt)
+                  : formatDuration(form.durationValue, form.durationUnit)}
+              </span>
             </div>
             <div className="cv-preview-label">投票选项</div>
             <div className="cv-preview-options">
@@ -438,11 +568,19 @@ export default function CreateVote() {
                   {option}
                 </div>
               ))}
+              <div className="cv-preview-option cv-preview-option--locked">
+                <span>{form.allowMultiple ? '⬜' : '⚪'}</span>
+                {ABSTAIN_TEXT}
+              </div>
             </div>
             <div className="cv-preview-submit">提交投票</div>
           </div>
           <ul className="cv-tips">
-            <li>投票开始后参与者才能投票</li>
+            <li>
+              {form.participationMode === 'OPEN_LINK'
+                ? '创建后立即开始，可提前结束'
+                : '邀请足够的人后再手动开始'}
+            </li>
             <li>每场投票每人只能参与一次</li>
             <li>投票成功后必须下载全量记录 PDF</li>
           </ul>
