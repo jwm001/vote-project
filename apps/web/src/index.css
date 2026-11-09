@@ -99,3 +99,93 @@ label {
   color: #333;
   font-size: 0.9em;
 }
+
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 1.75rem 1.5rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  max-width: 760px;
+  margin: 1.5rem auto;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  margin-bottom: 0.5rem;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: #eef0ff;
+  color: #4a54a8;
+}
+
+.pill--live {
+  background: #e6f7ec;
+  color: #1d7a3c;
+}
+
+.pill--draft {
+  background: #fff6dd;
+  color: #8a6400;
+}
+
+.pill--ended {
+  background: #eceff3;
+  color: #5b6472;
+}
+
+.error {
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.88rem;
+  margin-bottom: 1rem;
+}
+
+.muted {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.btn-secondary {
+  background: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+  box-shadow: none;
+}
+
+@media (max-width: 768px) {
+  .card {
+    padding: 1.25rem 1rem;
+    border-radius: 14px;
+  }
+
+  .page-title {
+    font-size: 1.25rem;
+  }
+}

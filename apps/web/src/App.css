@@ -1,0 +1,124 @@
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 10px 40px rgba(102, 126, 234, 0.15);
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 1.5rem;
+}
+
+.nav-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.nav-brand {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.nav-toggle {
+  display: none;
+  padding: 0.4em 0.8em;
+  font-size: 0.9em;
+  background: white;
+  color: #667eea;
+  border: 1px solid #667eea;
+  box-shadow: none;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.nav-link {
+  color: #333;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.nav-user a {
+  color: #333;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.nav-badge {
+  padding: 0.3rem 0.7rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  color: #155724;
+}
+
+.nav-badge--pending {
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  color: #856404;
+}
+
+.nav-logout {
+  padding: 0.4em 1em;
+  font-size: 0.85em;
+}
+
+.share-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1.25rem;
+  background: #f8f9ff;
+  border: 1px solid rgba(102, 126, 234, 0.25);
+  border-radius: 14px;
+}
+
+.share-card input {
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .nav-toggle {
+    display: block;
+  }
+
+  .nav-links {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.8rem;
+    padding-top: 0.8rem;
+  }
+
+  .nav-links--open {
+    display: flex;
+  }
+
+  .nav-user {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}
