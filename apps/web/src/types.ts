@@ -59,3 +59,15 @@ export interface RosterView {
   votedCount: number;
   eligibleCount: number | null;
 }
+
+export type MyInviteStatus = "INVITED" | "ACCEPTED" | "EXPIRED";
+
+export interface MyInviteItem {
+  inviteId: string;
+  voteId: string;
+  voteTitle: string;
+  creatorUsername: string;
+  status: MyInviteStatus;
+  phase: VotePhase;
+  expiresAt: string | null;
+}

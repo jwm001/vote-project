@@ -1,0 +1,135 @@
+.invite-actions {
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+}
+
+.invite-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7em 1.4em;
+  border-radius: 10px;
+  border: 2px solid #667eea;
+  background: white;
+  color: #667eea;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.invite-action:hover:not(:disabled) {
+  color: #764ba2;
+  border-color: #764ba2;
+}
+
+.invite-action--primary {
+  border-color: transparent;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.invite-action--primary:hover:not(:disabled) {
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+}
+
+.invite-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.invite-note {
+  color: #555;
+  background: #f8f9ff;
+  border: 1px solid rgba(102, 126, 234, 0.18);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.84rem;
+  line-height: 1.55;
+  margin-top: 1rem;
+}
+
+.invite-note--warn {
+  color: #8a6400;
+  background: #fff6dd;
+  border-color: #ffe8a3;
+}
+
+.invite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.invite-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.1rem;
+  background: white;
+  border: 1px solid rgba(102, 126, 234, 0.16);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.invite-item-main {
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.invite-item-title {
+  display: inline-block;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 0.35rem;
+  word-break: break-word;
+}
+
+.invite-item-title:hover {
+  color: #667eea;
+}
+
+.invite-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem 0.9rem;
+  flex-wrap: wrap;
+  color: #777;
+  font-size: 0.8rem;
+}
+
+.invite-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+@media (max-width: 640px) {
+  .invite-actions {
+    flex-direction: column;
+  }
+
+  .invite-action {
+    width: 100%;
+  }
+
+  .invite-item-actions {
+    width: 100%;
+  }
+
+  .invite-item-actions .invite-action {
+    width: 100%;
+  }
+}

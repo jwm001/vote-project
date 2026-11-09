@@ -15,7 +15,9 @@ import Register from "./pages/Register";
 import CreateVote from "./pages/CreateVote";
 import VoteDetail from "./pages/VoteDetail";
 import MyVotes from "./pages/MyVotes";
+import MyInvites from "./pages/MyInvites";
 import Account from "./pages/Account";
+import InviteLanding from "./pages/InviteLanding";
 
 interface NavUser {
   username: string;
@@ -132,6 +134,8 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/my-votes" element={<MyVotes />} />
+          <Route path="/my-invites" element={<MyInvites />} />
+          <Route path="/invite/:token" element={<InviteLanding />} />
           <Route path="/create" element={<CreateVote />} />
           <Route path="/vote/:id" element={<VoteDetail />} />
           <Route path="/account" element={<Account />} />

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { safePath } from "../navigation";
+import { formatUtc } from "../format";
 
 interface AccountUser {
   id: string;
@@ -16,13 +17,6 @@ function statusLabel(status: string): string {
   if (status === "APPROVED") return "已实名通过";
   if (status === "PENDING_VERIFICATION") return "待核验";
   return status;
-}
-
-function formatUtc(value: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
 }
 
 export default function Account() {

@@ -59,6 +59,13 @@ export default function Register() {
         return;
       }
 
+      if (inviteToken) {
+        // 从邀请落地页来的「注册并接受」：直接登录，回到邀请页即可接受。
+        localStorage.setItem("token", data.token);
+        navigate(destination);
+        return;
+      }
+
       navigate(destination, {
         state:
           destination === "/login" ? { notice: "注册成功，请登录" } : undefined,
