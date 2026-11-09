@@ -19,6 +19,7 @@ export interface VoteDetailView {
   resultsPublicDuringVote: boolean;
   startAt: string;
   endAt: string;
+  durationMinutes: number | null;
   options: VoteOptionView[];
   votedCount: number;
   eligibleCount: number | null;
@@ -56,8 +57,9 @@ export interface RosterView {
   visible: boolean;
   mode: "MASKED" | "FULL" | "COUNT_ONLY";
   entries: RosterEntryView[];
-  votedCount: number;
-  eligibleCount: number | null;
+  votedCount?: number;
+  eligibleCount?: number | null;
+  count?: number;
 }
 
 export type MyInviteStatus = "INVITED" | "ACCEPTED" | "EXPIRED";

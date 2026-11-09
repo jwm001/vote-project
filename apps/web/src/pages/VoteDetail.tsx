@@ -1,213 +1,399 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { api, ApiError } from "../api";
+import { formatUtc } from "../format";
+import { phaseLabel, phasePillClass } from "../labels";
+import ShareCard from "../components/ShareCard";
+import ResultsPanel from "../components/ResultsPanel";
+import RosterPanel from "../components/RosterPanel";
+import type {
+  ResultsView,
+  RosterView,
+  VoteDetailView,
+  VoteOptionView,
+} from "../types";
+import "./VoteDetail.css";
 
-interface Option {
-  id: string;
-  text: string;
-  order: number;
+interface LoadError {
+  message: string;
+  kind: "forbidden" | "missing" | "other";
 }
 
-interface Vote {
-  id: string;
-  title: string;
-  description?: string;
-  allowMultiple: boolean;
-  startAt: string;
-  endAt: string;
-  options: Option[];
+function timingText(vote: VoteDetailView): string {
+  if (vote.participationMode === "INVITE_ONLY" && vote.phase === "DRAFT") {
+    return vote.durationMinutes
+      ? `投票时长 ${vote.durationMinutes} 分钟（开始后计时）`
+      : "开始后计时";
+  }
+  return `${formatUtc(vote.startAt)} — ${formatUtc(vote.endAt)}`;
 }
 
 export default function VoteDetail() {
-  const { id } = useParams();
+  const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [vote, setVote] = useState<Vote | null>(null);
-  const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
-  const [user, setUser] = useState<any>(null);
-  const [hasVoted, setHasVoted] = useState(false);
+
+  const [vote, setVote] = useState<VoteDetailView | null>(null);
+  const [results, setResults] = useState<ResultsView | null>(null);
+  const [roster, setRoster] = useState<RosterView | null>(null);
+  const [viewerStatus, setViewerStatus] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<LoadError | null>(null);
+
+  const [selected, setSelected] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [downloadError, setDownloadError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const loginHref = `/login?redirect=${encodeURIComponent(`/vote/${id}`)}`;
+  const accountHref = `/account?redirect=${encodeURIComponent(`/vote/${id}`)}`;
+
+  const load = useCallback(async () => {
+    if (!id) return;
+
+    if (!localStorage.getItem("token")) {
+      navigate(loginHref, { replace: true });
+      return;
+    }
+
+    setLoading(true);
+    setLoadError(null);
+
+    try {
+      const data = await api.get<{ vote: VoteDetailView }>(`/api/votes/${id}`);
+      setVote(data.vote);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        localStorage.removeItem("token");
+        navigate(loginHref, { replace: true });
+        return;
+      }
+      setLoadError({
+        message:
+          error instanceof ApiError
+            ? error.message
+            : "投票加载失败，请稍后重试。",
+        kind:
+          error instanceof ApiError && error.status === 403
+            ? "forbidden"
+            : error instanceof ApiError && error.status === 404
+              ? "missing"
+              : "other",
+      });
+      setLoading(false);
+      return;
+    }
+
+    const [me, resultsData, rosterData] = await Promise.allSettled([
+      api.get<{ user: { status: string } }>("/api/auth/me"),
+      api.get<ResultsView>(`/api/votes/${id}/results`),
+      api.get<RosterView>(`/api/votes/${id}/roster`),
+    ]);
+
+    if (me.status === "fulfilled") {
+      setViewerStatus(me.value.user.status);
+    }
+    setResults(resultsData.status === "fulfilled" ? resultsData.value : null);
+    setRoster(rosterData.status === "fulfilled" ? rosterData.value : null);
+    setLoading(false);
+  }, [id, loginHref, navigate]);
 
   useEffect(() => {
-    fetchVote();
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
-        .then(res => res.ok ? res.json() : null)
-        .then(data => data && setUser(data.user));
-      fetch(`/api/votes/${id}/has-voted`, { headers: { Authorization: `Bearer ${token}` } })
-        .then(res => res.ok ? res.json() : { hasVoted: false })
-        .then(data => setHasVoted(data.hasVoted))
-        .catch(() => {});
-    }
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    setSelected([]);
+    setSubmitError("");
+    setNotice("");
+    setDownloadError("");
   }, [id]);
 
-  const fetchVote = async () => {
-    try {
-      const res = await fetch(`/api/votes/${id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setVote(data.vote);
-      }
-    } catch (error) {
-      console.error("Failed to fetch vote", error);
+  const handleSelect = (option: VoteOptionView) => {
+    if (!vote?.canVote) return;
+
+    if (!vote.allowMultiple) {
+      setSelected([option.id]);
+      return;
     }
+
+    setSelected((previous) => {
+      if (previous.includes(option.id)) {
+        return previous.filter((selectedId) => selectedId !== option.id);
+      }
+      if (option.isAbstain) {
+        // 弃权与其它选项互斥。
+        return [option.id];
+      }
+      const abstainId = vote.options.find((item) => item.isAbstain)?.id;
+      const withoutAbstain = abstainId
+        ? previous.filter((selectedId) => selectedId !== abstainId)
+        : previous;
+      return [...withoutAbstain, option.id];
+    });
   };
 
-  const handleSelectOption = (optionId: string) => {
-    if (!vote || hasVoted) return;
-    if (vote.allowMultiple) {
-      if (selectedOptions.includes(optionId)) {
-        setSelectedOptions(selectedOptions.filter((o) => o !== optionId));
-      } else {
-        setSelectedOptions([...selectedOptions, optionId]);
-      }
-    } else {
-      setSelectedOptions([optionId]);
+  const downloadPdf = async () => {
+    setDownloadError("");
+    try {
+      await api.download(`/api/votes/${id}/audit/pdf`, `audit-${id}.pdf`);
+    } catch {
+      setDownloadError("PDF 下载失败，请重试");
     }
   };
 
   const handleSubmit = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("请先登录");
-      navigate("/login");
-      return;
-    }
-    if (user?.status !== 'APPROVED') {
-      alert("需要实名认证审核通过才能投票");
-      return;
-    }
-    if (hasVoted) {
-      alert("您已投过此票");
-      return;
-    }
-    if (selectedOptions.length === 0) {
-      alert("请选择选项");
-      return;
-    }
+    if (!vote?.canVote || selected.length === 0 || submitting) return;
+
+    setSubmitting(true);
+    setSubmitError("");
+    setDownloadError("");
+    setNotice("");
 
     try {
-      const res = await fetch(`/api/votes/${id}/submit`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ optionIds: selectedOptions }),
-      });
-
-      if (res.ok) {
-        alert("投票成功，正在下载全量记录PDF...");
-        try {
-          const pdfRes = await fetch(`/api/votes/${id}/audit/pdf`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (pdfRes.ok) {
-            const blob = await pdfRes.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `audit-${id}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-          }
-        } catch (e) {
-          console.error('PDF下载失败', e);
-        }
-        setHasVoted(true);
-        fetchVote();
-      } else {
-        const data = await res.json();
-        alert(data.error || "投票失败");
-      }
+      await api.post(`/api/votes/${id}/submit`, { optionIds: selected });
+      setSelected([]);
+      setNotice("投票成功。");
+      // 投票成功后必须下载本场全量记录；失败只提示重试，不撤销投票结果。
+      await downloadPdf();
+      await load();
     } catch (error) {
-      alert("投票失败");
+      setSubmitError(
+        error instanceof ApiError ? error.message : "投票失败，请稍后重试。"
+      );
+      if (error instanceof ApiError && error.status === 409) {
+        await load();
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  if (!vote) {
-    return <div style={{ background: 'white', borderRadius: '12px', padding: '2rem', textAlign: 'center', fontSize: '0.9rem' }}>加载中...</div>;
+  if (loading && !vote) {
+    return (
+      <div className="card">
+        <p className="muted">加载中…</p>
+      </div>
+    );
   }
 
+  if (loadError) {
+    const title =
+      loadError.kind === "forbidden"
+        ? "无法查看投票"
+        : loadError.kind === "missing"
+          ? "投票不存在"
+          : "加载失败";
+    return (
+      <div className="card">
+        <h1 className="page-title">{title}</h1>
+        <div className="error" style={{ marginTop: "1rem" }}>
+          {loadError.message}
+        </div>
+        <div className="vd-actions">
+          {loadError.kind === "other" && (
+            <button type="button" onClick={() => void load()}>
+              重试
+            </button>
+          )}
+          <Link to="/" className="vd-link-button">
+            返回首页
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (!vote) return null;
+
+  const sortedOptions = [...vote.options].sort((a, b) => a.order - b.order);
+  const isModeB = vote.participationMode === "INVITE_ONLY";
+  const unverified = viewerStatus !== "" && viewerStatus !== "APPROVED";
+  const unacceptedInvite =
+    isModeB &&
+    vote.phase === "LIVE" &&
+    vote.isInvitee &&
+    !vote.hasVoted &&
+    !vote.canVote &&
+    !unverified &&
+    !vote.isCreator;
+
   return (
-    <div style={{
-      background: 'white',
-      borderRadius: '14px',
-      padding: '1.8rem 1.5rem',
-      boxShadow: '0 15px 50px rgba(0, 0, 0, 0.25)',
-      maxWidth: '700px',
-      margin: '1rem auto',
-      border: '1px solid rgba(255, 255, 255, 0.2)'
-    }}>
-      <h1 style={{ marginBottom: '0.5rem', fontSize: '1.6rem', fontWeight: '700' }}>{vote.title}</h1>
-      {vote.description && <p style={{ color: '#666', marginBottom: '1rem', fontSize: '0.9rem', lineHeight: '1.6' }}>{vote.description}</p>}
-      <div style={{ display: 'flex', gap: '0.8rem', color: '#666', fontSize: '0.8rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-        <span style={{ padding: '0.2rem 0.6rem', background: '#f0f1ff', borderRadius: '6px', color: '#667eea' }}>{vote.allowMultiple ? '多选' : '单选'}</span>
-        <span>🕐 {new Date(vote.startAt).toLocaleString()} - {new Date(vote.endAt).toLocaleString()}</span>
-      </div>
-      <h3 style={{ marginBottom: '0.9rem', fontSize: '1.1rem', fontWeight: '600' }}>选择选项</h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.5rem' }}>
-        {vote.options.sort((a, b) => a.order - b.order).map(option => (
-          <div
-            key={option.id}
-            onClick={() => handleSelectOption(option.id)}
-            style={{
-              padding: '0.9rem 1.2rem',
-              border: selectedOptions.includes(option.id) ? '2px solid #667eea' : '2px solid #e8e8e8',
-              borderRadius: '10px',
-              cursor: hasVoted ? 'not-allowed' : 'pointer',
-              background: selectedOptions.includes(option.id) ? '#f8f9ff' : hasVoted ? '#f9f9f9' : 'white',
-              opacity: hasVoted ? 0.6 : 1,
-              transition: 'all 0.2s ease',
-              fontWeight: selectedOptions.includes(option.id) ? '600' : '400',
-              fontSize: '0.9rem'
-            }}
-          >
-            {vote.allowMultiple ? (selectedOptions.includes(option.id) ? '☑️' : '⬜') : (selectedOptions.includes(option.id) ? '🔘' : '⚪')} {option.text}
-          </div>
-        ))}
-      </div>
-      {user?.status !== 'APPROVED' && (
-        <p style={{ color: '#e74c3c', marginBottom: '0.8rem', textAlign: 'center', fontSize: '0.85rem' }}>
-          ⚠️ 您的实名认证尚未审核通过，暂无法投票
+    <div className="vd-card">
+      <header className="vd-head">
+        <div className="vd-pills">
+          <span className="pill">
+            {isModeB ? "邀请制" : "公开链接"}
+          </span>
+          <span className={phasePillClass(vote.phase)}>
+            {phaseLabel(vote.phase)}
+          </span>
+          <span className="pill">{vote.allowMultiple ? "多选" : "单选"}</span>
+        </div>
+        <h1 className="page-title">{vote.title}</h1>
+        {vote.description && <p className="vd-desc">{vote.description}</p>}
+        <p className="vd-time">{timingText(vote)}</p>
+        <p className="vd-counts">
+          已投 {vote.votedCount}
+          {vote.eligibleCount !== null && ` / ${vote.eligibleCount}`} 人
         </p>
-      )}
-      {hasVoted && (
-        <div style={{ background: '#f0fdf4', padding: '0.9rem', borderRadius: '10px', marginBottom: '0.9rem', textAlign: 'center' }}>
-          <p style={{ color: '#27ae60', fontWeight: '600', marginBottom: '0.3rem', fontSize: '0.9rem' }}>
-            ✅ 您已投过此票
-          </p>
-          <p style={{ color: '#666', fontSize: '0.8rem' }}>
-            可在"我的投票"中查看您的假名和下载全量记录
-          </p>
+      </header>
+
+      {!isModeB && (
+        <div className="vd-share">
+          <p className="vd-share-label">分享这场投票</p>
+          <ShareCard url={`/vote/${vote.id}`} />
         </div>
       )}
-      {hasVoted ? (
-        <button onClick={async () => {
-          const token = localStorage.getItem('token');
-          try {
-            const pdfRes = await fetch(`/api/votes/${id}/audit/pdf`, {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            if (pdfRes.ok) {
-              const blob = await pdfRes.blob();
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `audit-${id}.pdf`;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-              window.URL.revokeObjectURL(url);
-            }
-          } catch(e) {}
-        }} style={{ width: '100%', fontSize: '0.9rem', padding: '0.75em' }}>
-          下载全量记录PDF
-        </button>
-      ) : (
-        <button onClick={handleSubmit} style={{ width: '100%', fontSize: '0.9rem', padding: '0.75em' }} disabled={user?.status !== 'APPROVED'}>
-          提交投票（投票后将自动下载全量记录PDF）
-        </button>
+
+      {notice && <div className="vd-alert vd-alert--ok">{notice}</div>}
+      {submitError && <div className="vd-alert vd-alert--error">{submitError}</div>}
+      {downloadError && (
+        <div className="vd-alert vd-alert--error">
+          {downloadError}
+          <button type="button" className="vd-inline-button" onClick={() => void downloadPdf()}>
+            重试下载
+          </button>
+        </div>
+      )}
+
+      {vote.phase === "DRAFT" && (
+        <div className="vd-box">
+          <p className="vd-box-title">等待发起人开始投票</p>
+          <p className="muted">开始后才能提交选票，时长从开始时刻计算。</p>
+          {vote.isCreator && (
+            <p className="muted">
+              你是发起人：
+              <Link to="/my-votes">去「我的投票」管理邀请并开始投票</Link>
+            </p>
+          )}
+        </div>
+      )}
+
+      {vote.phase === "LIVE" && (
+        <>
+          {vote.canVote ? (
+            <>
+              <h2 className="vd-section-title">选择选项</h2>
+              <div className="vd-options">
+                {sortedOptions.map((option) => {
+                  const active = selected.includes(option.id);
+                  return (
+                    <label
+                      key={option.id}
+                      className={`vd-option${active ? " vd-option--active" : ""}${
+                        option.isAbstain ? " vd-option--abstain" : ""
+                      }`}
+                    >
+                      <input
+                        type={vote.allowMultiple ? "checkbox" : "radio"}
+                        name="vd-option"
+                        checked={active}
+                        onChange={() => handleSelect(option)}
+                      />
+                      <span className="vd-option-text">{option.text}</span>
+                      {option.isAbstain && (
+                        <span className="vd-tag">系统选项</span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="vd-hint">
+                {vote.allowMultiple
+                  ? "可以选择多个选项；弃权与其它选项互斥，只能单独选择。"
+                  : "只能选择 1 个选项；弃权为系统选项，计为一票。"}
+              </p>
+              <button
+                type="button"
+                className="vd-submit"
+                disabled={selected.length === 0 || submitting}
+                onClick={handleSubmit}
+              >
+                {submitting
+                  ? "提交中…"
+                  : "提交投票（提交后自动下载全量记录 PDF）"}
+              </button>
+            </>
+          ) : vote.hasVoted ? (
+            <div className="vd-box vd-box--ok">
+              <p className="vd-box-title">✅ 你已投过本场的票</p>
+              <p className="muted">
+                投票记录不含实名。可在「我的投票」查看你的假名与序号。
+              </p>
+            </div>
+          ) : vote.isCreator ? (
+            <div className="vd-box">
+              <p className="vd-box-title">投票进行中</p>
+              <p className="muted">你是发起人，可在「我的投票」中管理本场投票。</p>
+            </div>
+          ) : unverified ? (
+            <div className="vd-box vd-box--warn">
+              <p className="vd-box-title">实名核验尚未通过</p>
+              <p className="muted">
+                只有实名核验通过后才能投票。
+                <Link to={accountHref}>去完成核验</Link>
+              </p>
+            </div>
+          ) : unacceptedInvite ? (
+            <div className="vd-box vd-box--warn">
+              <p className="vd-box-title">你尚未接受本场邀请</p>
+              <p className="muted">
+                <Link to="/my-invites">去「我的邀请」接受邀请</Link>
+                后即可投票。
+              </p>
+            </div>
+          ) : (
+            <div className="vd-box">
+              <p className="muted">当前无法投票。</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {vote.phase === "ENDED" && (
+        <div className="vd-box vd-box--ok">
+          <p className="vd-box-title">投票已结束</p>
+          <p className="muted">
+            {vote.hasVoted ? "你已参与本场投票。" : "你没有参与本场投票。"}
+          </p>
+          <button
+            type="button"
+            className="vd-inline-button"
+            onClick={() => void downloadPdf()}
+          >
+            下载完整全量记录 PDF
+          </button>
+        </div>
+      )}
+
+      {vote.phase === "LIVE" && (vote.hasVoted || vote.isCreator) && (
+        <div className="vd-download">
+          <button
+            type="button"
+            className="vd-inline-button"
+            onClick={() => void downloadPdf()}
+          >
+            下载全量记录 PDF
+          </button>
+        </div>
+      )}
+
+      {vote.phase !== "DRAFT" && (
+        <ResultsPanel
+          results={results}
+          phase={vote.phase}
+          votedCount={vote.votedCount}
+          eligibleCount={vote.eligibleCount}
+        />
+      )}
+
+      {(isModeB || vote.phase === "ENDED") && (
+        <RosterPanel
+          roster={roster}
+          votedCount={vote.votedCount}
+          eligibleCount={vote.eligibleCount}
+        />
       )}
     </div>
   );

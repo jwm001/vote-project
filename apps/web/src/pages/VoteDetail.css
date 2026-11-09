@@ -1,0 +1,404 @@
+.vd-card {
+  background: white;
+  border-radius: 16px;
+  padding: 1.8rem 1.6rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  max-width: 860px;
+  margin: 1.2rem auto;
+}
+
+/* ---------- header ---------- */
+
+.vd-head {
+  margin-bottom: 1.2rem;
+}
+
+.vd-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+}
+
+.vd-desc {
+  color: #555;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  margin-top: 0.4rem;
+  white-space: pre-wrap;
+}
+
+.vd-time {
+  color: #666;
+  font-size: 0.8rem;
+  margin-top: 0.6rem;
+}
+
+.vd-counts {
+  display: inline-block;
+  margin-top: 0.6rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  background: #f0f1ff;
+  color: #4a54a8;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.vd-share {
+  margin: 1.2rem 0;
+}
+
+.vd-share-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 0.55rem;
+}
+
+/* ---------- alerts and boxes ---------- */
+
+.vd-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.vd-alert--ok {
+  color: #1d7a3c;
+  background: #e6f7ec;
+  border: 1px solid #b7e4c7;
+}
+
+.vd-alert--error {
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+}
+
+.vd-box {
+  padding: 1rem 1.1rem;
+  border-radius: 12px;
+  background: #f8f9ff;
+  border: 1px solid rgba(102, 126, 234, 0.18);
+  margin-bottom: 1.2rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.vd-box--ok {
+  background: #f0fdf4;
+  border-color: #b7e4c7;
+}
+
+.vd-box--warn {
+  background: #fff6dd;
+  border-color: #ffe8a3;
+}
+
+.vd-box-title {
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+  color: #1a1a1a;
+}
+
+.vd-box a {
+  font-weight: 600;
+  margin-left: 0.2rem;
+}
+
+/* ---------- voting ---------- */
+
+.vd-section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 0.8rem;
+}
+
+.vd-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 0.8rem;
+}
+
+.vd-option {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem 1rem;
+  border: 2px solid #e8e8e8;
+  border-radius: 10px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+}
+
+.vd-option:hover {
+  border-color: #b9c1f5;
+}
+
+.vd-option--active {
+  border-color: #667eea;
+  background: #f8f9ff;
+  font-weight: 600;
+}
+
+.vd-option--abstain {
+  border-style: dashed;
+}
+
+.vd-option input {
+  width: auto;
+  flex: 0 0 auto;
+  accent-color: #667eea;
+  margin: 0;
+}
+
+.vd-option-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.vd-tag {
+  flex: 0 0 auto;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  background: #eceef7;
+  color: #6b7080;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.vd-tag--voted {
+  background: #e6f7ec;
+  color: #1d7a3c;
+}
+
+.vd-tag--pending {
+  background: #fff6dd;
+  color: #8a6400;
+}
+
+.vd-hint {
+  color: #777;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.vd-submit {
+  width: 100%;
+  font-size: 0.9rem;
+  padding: 0.75em;
+  margin-bottom: 1.4rem;
+}
+
+.vd-download {
+  margin-bottom: 1.2rem;
+}
+
+.vd-inline-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55em 1.1em;
+  margin-left: 0.6rem;
+  border-radius: 8px;
+  border: 2px solid #667eea;
+  background: white;
+  color: #667eea;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vd-inline-button:hover:not(:disabled) {
+  color: #764ba2;
+  border-color: #764ba2;
+}
+
+.vd-actions {
+  display: flex;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  margin-top: 1.2rem;
+}
+
+.vd-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55em 1.1em;
+  border-radius: 8px;
+  border: 2px solid #667eea;
+  color: #667eea;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.vd-link-button:hover {
+  color: #764ba2;
+  border-color: #764ba2;
+}
+
+/* ---------- results ---------- */
+
+.vd-panel {
+  margin-top: 1.6rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid #eef0f7;
+}
+
+.vd-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.vd-panel-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.vd-panel-meta {
+  color: #777;
+  font-size: 0.78rem;
+}
+
+.vd-panel-note {
+  color: #777;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.vd-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.vd-result-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  font-size: 0.86rem;
+  margin-bottom: 0.3rem;
+}
+
+.vd-result-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.vd-result-count {
+  flex: 0 0 auto;
+  color: #555;
+  font-variant-numeric: tabular-nums;
+}
+
+.vd-result-row--abstain .vd-result-text {
+  color: #6b7080;
+}
+
+.vd-result-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #eef0f7;
+  overflow: hidden;
+}
+
+.vd-result-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.vd-result-fill--abstain {
+  background: #c3c8d8;
+}
+
+.vd-result-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 10px;
+  background: #f8f9ff;
+  border: 1px solid rgba(102, 126, 234, 0.16);
+  font-size: 0.86rem;
+}
+
+/* ---------- roster ---------- */
+
+.vd-roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.vd-roster-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.8rem;
+  border-radius: 9px;
+  background: #fafbff;
+  border: 1px solid #eef0f7;
+  font-size: 0.85rem;
+}
+
+.vd-roster-name {
+  font-weight: 600;
+  color: #333;
+  word-break: break-word;
+}
+
+.vd-roster-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .vd-card {
+    padding: 1.3rem 1rem;
+    border-radius: 14px;
+  }
+
+  .vd-inline-button {
+    margin-left: 0;
+  }
+
+  .vd-result-line {
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+}

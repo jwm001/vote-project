@@ -18,6 +18,7 @@ export function inviteStatusLabel(status: MyInviteStatus | string): string {
   if (status === "INVITED") return "待接受";
   if (status === "ACCEPTED") return "已接受";
   if (status === "EXPIRED") return "已过期";
+  if (status === "REMOVED") return "已移除";
   return status;
 }
 
