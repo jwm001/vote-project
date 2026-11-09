@@ -1,0 +1,131 @@
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 900px;
+  margin: 1.5rem auto;
+}
+
+.home-hero {
+  background: white;
+  border-radius: 16px;
+  padding: 2.5rem 1.5rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  text-align: center;
+}
+
+.home-hero-emoji {
+  font-size: 2.5rem;
+  margin-bottom: 0.8rem;
+}
+
+.home-title {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 0.6rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.home-subtitle {
+  font-size: 1rem;
+  color: #666;
+  line-height: 1.6;
+  font-weight: 500;
+  margin-bottom: 2rem;
+}
+
+.home-actions {
+  display: flex;
+  gap: 0.8rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.home-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  padding: 0.8em 1.8em;
+  border-radius: 10px;
+  border: 2px solid #667eea;
+  background: white;
+  color: #667eea;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.3px;
+  transition: all 0.2s ease;
+}
+
+.home-action:hover {
+  color: #764ba2;
+  border-color: #764ba2;
+}
+
+.home-action--primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.home-action--primary:hover {
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(102, 126, 234, 0.5);
+}
+
+.home-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.home-feature {
+  padding: 1.25rem;
+  background: white;
+  border-radius: 14px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  text-align: left;
+}
+
+.home-feature-icon {
+  font-size: 1.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.home-feature h3 {
+  color: #667eea;
+  font-size: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.home-feature p {
+  color: #555;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 768px) {
+  .home-hero {
+    padding: 2rem 1.1rem;
+  }
+
+  .home-title {
+    font-size: 1.6rem;
+  }
+
+  .home-actions {
+    flex-direction: column;
+  }
+
+  .home-action {
+    width: 100%;
+  }
+}
