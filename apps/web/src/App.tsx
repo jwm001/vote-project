@@ -14,6 +14,7 @@ import Register from "./pages/Register";
 import CreateVote from "./pages/CreateVote";
 import VoteDetail from "./pages/VoteDetail";
 import MyVotes from "./pages/MyVotes";
+import Account from "./pages/Account";
 
 interface NavUser {
   username: string;
@@ -127,6 +128,7 @@ function App() {
           <Route path="/my-votes" element={<MyVotes />} />
           <Route path="/create" element={<CreateVote />} />
           <Route path="/vote/:id" element={<VoteDetail />} />
+          <Route path="/account" element={<Account />} />
         </Routes>
       </div>
     </Router>
