@@ -45,6 +45,8 @@ export default function VoteDetail() {
   const [submitError, setSubmitError] = useState("");
   const [downloadError, setDownloadError] = useState("");
   const [notice, setNotice] = useState("");
+  const [ending, setEnding] = useState(false);
+  const [endError, setEndError] = useState("");
 
   const loginHref = `/login?redirect=${encodeURIComponent(`/vote/${id}`)}`;
   const accountHref = `/account?redirect=${encodeURIComponent(`/vote/${id}`)}`;
@@ -108,6 +110,7 @@ export default function VoteDetail() {
     setSubmitError("");
     setNotice("");
     setDownloadError("");
+    setEndError("");
   }, [id]);
 
   const handleSelect = (option: VoteOptionView) => {
@@ -167,6 +170,25 @@ export default function VoteDetail() {
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const endVote = async () => {
+    if (!window.confirm("确定提前结束本场投票吗？结束后不能再提交选票。")) {
+      return;
+    }
+
+    setEnding(true);
+    setEndError("");
+    try {
+      await api.post(`/api/votes/${id}/end`);
+      await load();
+    } catch (error) {
+      setEndError(
+        error instanceof ApiError ? error.message : "结束投票失败，请稍后重试。"
+      );
+    } finally {
+      setEnding(false);
     }
   };
 
@@ -249,6 +271,7 @@ export default function VoteDetail() {
 
       {notice && <div className="vd-alert vd-alert--ok">{notice}</div>}
       {submitError && <div className="vd-alert vd-alert--error">{submitError}</div>}
+      {endError && <div className="vd-alert vd-alert--error">{endError}</div>}
       {downloadError && (
         <div className="vd-alert vd-alert--error">
           {downloadError}
@@ -331,7 +354,9 @@ export default function VoteDetail() {
             <div className="vd-box">
               <p className="vd-box-title">投票进行中</p>
               <p className="muted">
-                你是发起人，可在上方「受邀人管理」中查看名单、移除未投票的受邀人并提前结束投票。
+                {isModeB
+                  ? "你是发起人，可在上方「受邀人管理」中查看名单、移除未投票的受邀人并提前结束投票。"
+                  : "你是发起人，可以分享上方链接，或提前结束本场投票。"}
               </p>
             </div>
           ) : unverified ? (
@@ -370,6 +395,19 @@ export default function VoteDetail() {
             onClick={() => void downloadPdf()}
           >
             下载完整全量记录 PDF
+          </button>
+        </div>
+      )}
+
+      {vote.phase === "LIVE" && vote.isCreator && !isModeB && (
+        <div className="vd-download">
+          <button
+            type="button"
+            className="vd-inline-button"
+            onClick={() => void endVote()}
+            disabled={ending}
+          >
+            {ending ? "结束中…" : "提前结束投票"}
           </button>
         </div>
       )}
