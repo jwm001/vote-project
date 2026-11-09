@@ -97,7 +97,7 @@
   word-break: break-word;
 }
 
-.invite-item-title:hover {
+a.invite-item-title:hover {
   color: #667eea;
 }
 

@@ -54,7 +54,11 @@ export default function MyInvites() {
           setState("ready");
           return;
         }
-        setLoadError("加载失败，请检查网络后重试。");
+        setLoadError(
+          error instanceof ApiError
+            ? error.message
+            : "加载失败，请检查网络后重试。"
+        );
         setState("error");
       });
 
@@ -82,6 +86,12 @@ export default function MyInvites() {
       if (error instanceof ApiError && error.status === 403) {
         setNeedsVerification(true);
         setActionError("你的账号尚未通过实名核验，请先完成核验。");
+        return;
+      }
+      if (error instanceof ApiError && (error.status === 409 || error.status === 410)) {
+        // 邀请已被他人接受 / 投票已结束 / 已过期：重新拉取列表，避免状态与错误矛盾。
+        setActionError(error.message);
+        setReloadKey((key) => key + 1);
         return;
       }
       setActionError(

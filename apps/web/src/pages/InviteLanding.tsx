@@ -32,6 +32,7 @@ export default function InviteLanding() {
   const [accepting, setAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState("");
   const [needsVerification, setNeedsVerification] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const isLoggedIn = Boolean(localStorage.getItem("token"));
   const encodedToken = encodeURIComponent(token);
@@ -60,7 +61,7 @@ export default function InviteLanding() {
     return () => {
       cancelled = true;
     };
-  }, [encodedToken]);
+  }, [encodedToken, reloadKey]);
 
   const handleAccept = async () => {
     setAcceptError("");
@@ -86,6 +87,12 @@ export default function InviteLanding() {
       if (error instanceof ApiError && error.status === 403) {
         setNeedsVerification(true);
         setAcceptError("你的账号尚未通过实名核验，请先完成核验。");
+        return;
+      }
+      if (error instanceof ApiError && (error.status === 409 || error.status === 410)) {
+        // 邀请已被他人接受 / 投票已结束 / 已过期：重新拉取，让页面状态与错误一致。
+        setAcceptError(error.message);
+        setReloadKey((key) => key + 1);
         return;
       }
       setAcceptError(
@@ -191,7 +198,7 @@ export default function InviteLanding() {
               disabled={accepting}
               onClick={handleAccept}
             >
-              {accepting ? "进入中…" : "进入投票"}
+              {accepting ? "进入中…" : "我是接受者，进入投票"}
             </button>
           ) : (
             <Link
