@@ -18,6 +18,7 @@ import MyVotes from "./pages/MyVotes";
 import MyInvites from "./pages/MyInvites";
 import Account from "./pages/Account";
 import InviteLanding from "./pages/InviteLanding";
+import AdminUsers from "./pages/admin/AdminUsers";
 
 interface NavUser {
   username: string;
@@ -139,6 +140,7 @@ function App() {
           <Route path="/create" element={<CreateVote />} />
           <Route path="/vote/:id" element={<VoteDetail />} />
           <Route path="/account" element={<Account />} />
+          <Route path="/admin/users" element={<AdminUsers />} />
         </Routes>
       </div>
     </Router>

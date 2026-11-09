@@ -64,6 +64,31 @@ export interface RosterView {
 
 export type MyInviteStatus = "INVITED" | "ACCEPTED" | "EXPIRED";
 
+export interface MyVoteItemBase {
+  voteId: string;
+  voteTitle: string;
+  participationMode: ParticipationMode;
+  phase: VotePhase;
+  allowMultiple: boolean;
+  startAt: string;
+  endAt: string;
+  votedCount: number;
+  eligibleCount: number | null;
+}
+
+export interface MyVoteCreated extends MyVoteItemBase {
+  relation: "CREATOR";
+}
+
+export interface MyVoteParticipated extends MyVoteItemBase {
+  relation: "PARTICIPANT";
+  pseudonym: string | null;
+  submittedAt: string | null;
+  sequenceNumber: number | null;
+}
+
+export type MyVoteItem = MyVoteCreated | MyVoteParticipated;
+
 export interface MyInviteItem {
   inviteId: string;
   voteId: string;

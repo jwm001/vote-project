@@ -6,6 +6,7 @@ import { phaseLabel, phasePillClass } from "../labels";
 import ShareCard from "../components/ShareCard";
 import ResultsPanel from "../components/ResultsPanel";
 import RosterPanel from "../components/RosterPanel";
+import InvitePanel from "../components/InvitePanel";
 import type {
   ResultsView,
   RosterView,
@@ -257,16 +258,20 @@ export default function VoteDetail() {
         </div>
       )}
 
+      {vote.isCreator && isModeB && (
+        <InvitePanel voteId={vote.id} phase={vote.phase} onChanged={load} />
+      )}
+
       {vote.phase === "DRAFT" && (
         <div className="vd-box">
-          <p className="vd-box-title">等待发起人开始投票</p>
-          <p className="muted">开始后才能提交选票，时长从开始时刻计算。</p>
-          {vote.isCreator && (
-            <p className="muted">
-              你是发起人：
-              <Link to="/my-votes">去「我的投票」管理邀请并开始投票</Link>
-            </p>
-          )}
+          <p className="vd-box-title">
+            {vote.isCreator ? "配置受邀人后开始投票" : "等待发起人开始投票"}
+          </p>
+          <p className="muted">
+            {vote.isCreator
+              ? "邀请至少一位用户接受后，在上方「受邀人管理」中开始投票；时长从开始时刻计算。"
+              : "开始后才能提交选票，时长从开始时刻计算。"}
+          </p>
         </div>
       )}
 
@@ -325,7 +330,9 @@ export default function VoteDetail() {
           ) : vote.isCreator ? (
             <div className="vd-box">
               <p className="vd-box-title">投票进行中</p>
-              <p className="muted">你是发起人，可在「我的投票」中管理本场投票。</p>
+              <p className="muted">
+                你是发起人，可在上方「受邀人管理」中查看名单、移除未投票的受邀人并提前结束投票。
+              </p>
             </div>
           ) : unverified ? (
             <div className="vd-box vd-box--warn">
@@ -388,7 +395,8 @@ export default function VoteDetail() {
         />
       )}
 
-      {(isModeB || vote.phase === "ENDED") && (
+      {/* 模式 B 的创建者已在 InvitePanel 里看到完整名单，避免重复展示。 */}
+      {(isModeB ? !vote.isCreator : vote.phase === "ENDED") && (
         <RosterPanel
           roster={roster}
           votedCount={vote.votedCount}

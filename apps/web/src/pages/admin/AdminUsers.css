@@ -1,0 +1,252 @@
+.au-page {
+  max-width: 1050px;
+  margin: 0 auto;
+}
+
+.au-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.2rem;
+}
+
+.au-title {
+  color: white;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.au-sub {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.82rem;
+  margin-top: 0.25rem;
+}
+
+.au-card {
+  background: white;
+  border-radius: 14px;
+  padding: 1.2rem 1.3rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(102, 126, 234, 0.1);
+}
+
+.au-table-wrap {
+  overflow-x: auto;
+  padding: 0.4rem 0.4rem 0.6rem;
+}
+
+.au-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+  font-size: 0.84rem;
+}
+
+.au-table th {
+  text-align: left;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #6b7080;
+  padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid #eef0f7;
+  white-space: nowrap;
+}
+
+.au-table td {
+  padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid #f2f4fa;
+  color: #333;
+  vertical-align: middle;
+}
+
+.au-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.au-table tbody tr:hover {
+  background: #fafbff;
+}
+
+.au-username {
+  font-weight: 600;
+  color: #4a54a8;
+  white-space: nowrap;
+}
+
+.au-time {
+  color: #777;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.au-status {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: #f1f2f6;
+  color: #6b7080;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.au-status--ok {
+  background: #e6f7ec;
+  color: #1d7a3c;
+}
+
+.au-status--pending {
+  background: #fff6dd;
+  color: #8a6400;
+}
+
+.au-inline-button {
+  padding: 0.35em 0.85em;
+  font-size: 0.76rem;
+  font-weight: 600;
+  border-radius: 7px;
+  border: 1px solid #cfd6f5;
+  background: white;
+  color: #667eea;
+  box-shadow: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.au-inline-button:hover:not(:disabled) {
+  background: #f0f1ff;
+  transform: none;
+  box-shadow: none;
+}
+
+.au-inline-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.au-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.au-link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55em 1.1em;
+  border-radius: 8px;
+  border: 2px solid #667eea;
+  color: #667eea;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.au-link-button:hover {
+  color: #764ba2;
+  border-color: #764ba2;
+}
+
+.au-alert {
+  padding: 0.65rem 0.85rem;
+  border-radius: 9px;
+  font-size: 0.82rem;
+  margin-bottom: 0.9rem;
+}
+
+.au-alert--error {
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+}
+
+/* ---------- reset-password modal ---------- */
+
+.au-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(20, 22, 40, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.au-modal {
+  width: 100%;
+  max-width: 440px;
+  background: white;
+  border-radius: 14px;
+  padding: 1.4rem 1.4rem 1.2rem;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+
+.au-modal-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.au-modal-text {
+  color: #555;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  margin-bottom: 0.9rem;
+}
+
+.au-password-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 0.8rem;
+  border-radius: 9px;
+  background: #f8f9ff;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.au-password {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #4a4a6a;
+  overflow-wrap: anywhere;
+}
+
+.au-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.au-primary {
+  padding: 0.6em 1.4em;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 9px;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.35);
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .au-card {
+    padding: 0.9rem 0.8rem;
+  }
+
+  .au-title {
+    font-size: 1.35rem;
+  }
+}
