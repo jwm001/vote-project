@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { useLocation, useSearchParams, Link } from "react-router-dom";
 import { api, ApiError } from "../api";
-
-function safePath(raw: string | null): string | null {
-  if (!raw) return null;
-  return raw.startsWith("/") && !raw.startsWith("//") ? raw : null;
-}
+import { safePath } from "../navigation";
 
 interface LoginResponse {
   token: string;

@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { api, ApiError } from "../api";
-
-function safePath(raw: string | null): string | null {
-  if (!raw) return null;
-  return raw.startsWith("/") && !raw.startsWith("//") ? raw : null;
-}
+import { safePath } from "../navigation";
 
 interface RegisterResponse {
   user: { status: string };
@@ -134,7 +130,7 @@ export default function Register() {
             value={form.idNumber}
             onChange={(e) => setForm({ ...form, idNumber: e.target.value })}
             placeholder="18 位大陆居民身份证号"
-            inputMode="numeric"
+            autoCapitalize="characters"
             autoComplete="off"
             required
           />

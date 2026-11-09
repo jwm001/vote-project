@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { api, ApiError } from "../api";
+import { safePath } from "../navigation";
 
 interface AccountUser {
   id: string;
@@ -9,11 +10,6 @@ interface AccountUser {
   role: string;
   realName: string;
   identityVerifiedAt: string | null;
-}
-
-function safePath(raw: string | null): string | null {
-  if (!raw) return null;
-  return raw.startsWith("/") && !raw.startsWith("//") ? raw : null;
 }
 
 function statusLabel(status: string): string {
@@ -56,10 +52,14 @@ export default function Account() {
   const [searchParams] = useSearchParams();
   const redirect = safePath(searchParams.get("redirect"));
   const notice = (location.state as { notice?: string } | null)?.notice;
+  const loginNext = redirect
+    ? `/account?redirect=${encodeURIComponent(redirect)}`
+    : "/account";
+  const loginUrl = `/login?redirect=${encodeURIComponent(loginNext)}`;
 
   useEffect(() => {
     if (!localStorage.getItem("token")) {
-      navigate("/login?redirect=/account", { replace: true });
+      navigate(loginUrl, { replace: true });
       return;
     }
 
@@ -69,13 +69,13 @@ export default function Account() {
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
           localStorage.removeItem("token");
-          navigate("/login?redirect=/account", { replace: true });
+          navigate(loginUrl, { replace: true });
           return;
         }
         setLoadError("账号信息加载失败，请刷新重试");
       })
       .finally(() => setLoading(false));
-  }, [navigate]);
+  }, [navigate, loginUrl]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,7 +232,7 @@ export default function Account() {
                   setReverifyForm({ ...reverifyForm, idNumber: e.target.value })
                 }
                 placeholder="18 位大陆居民身份证号"
-                inputMode="numeric"
+                autoCapitalize="characters"
                 autoComplete="off"
                 required
               />

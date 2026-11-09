@@ -4,6 +4,7 @@ import {
   Route,
   Link,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { api } from "./api";
@@ -24,18 +25,23 @@ interface NavUser {
 
 function Nav() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<NavUser | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // 路由变化时重新拉取，保证注册/登录后无需整页刷新导航栏状态。
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    if (!token) {
+      setUser(null);
+      return;
+    }
 
     api
       .get<{ user: NavUser }>("/api/auth/me")
       .then((data) => setUser(data.user))
       .catch(() => {});
-  }, []);
+  }, [location.pathname]);
 
   const closeMenu = () => setMenuOpen(false);
 
