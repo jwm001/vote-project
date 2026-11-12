@@ -9,7 +9,7 @@
 
 - npm workspaces：`apps/api`（Express + TS + Prisma + SQLite，CommonJS），`apps/web`（React + Vite，ESM）。
 - `packages/shared` 目前没有任何代码引用，且 `main`/`types` 指向不存在的 `src/index.ts`；不要从这里 import。
-- 根目录 `task-*-report.md`、`task-*-review.md` 和 `docs/superpowers/*/2025-*` 是历史产物（提到已删除的 multer / 照片审核），不要当作现状。
+- `docs/superpowers/*/2025-*` 是历史产物（提到已删除的 multer / 照片审核），不要当作现状。
 
 ## 命令（根目录执行）
 
