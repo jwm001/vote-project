@@ -54,3 +54,17 @@ export interface MyVoteParticipated extends MyVoteItemBase {
 }
 
 export type MyVoteItem = MyVoteCreated | MyVoteParticipated;
+
+export interface HallVoteItem {
+  voteId: string;
+  title: string;
+  description: string | null;
+  creatorUsername: string;
+  allowMultiple: boolean;
+  startAt: Date;
+  endAt: Date;
+  createdAt: Date;
+  votedCount: number;
+  hasVoted: boolean;
+  isCreator: boolean;
+}

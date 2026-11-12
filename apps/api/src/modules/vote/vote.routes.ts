@@ -12,13 +12,15 @@ router.post("/", authMiddleware, verifiedMiddleware, voteController.create.bind(
 
 // My invitations must stay above "/:id".
 router.get("/my/votes", authMiddleware, voteController.myVotes.bind(voteController));
-router.get("/my/invites", authMiddleware, inviteController.myInvites.bind(inviteController));
-router.post(
+router.get("/my/invites", authMiddleware, inviteController.myInvites.bind(inviteController));router.post(
   "/my/invites/:inviteId/accept",
   authMiddleware,
   verifiedMiddleware,
   inviteController.acceptById.bind(inviteController)
 );
+
+// Hall must stay above "/:id" for the same reason as "/my/*".
+router.get("/hall", authMiddleware, verifiedMiddleware, voteController.hall.bind(voteController));
 
 router.post(
   "/:id/invites/usernames",

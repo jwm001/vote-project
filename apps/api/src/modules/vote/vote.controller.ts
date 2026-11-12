@@ -180,6 +180,15 @@ export class VoteController {
     }
   }
 
+  async hall(req: AuthRequest, res: Response) {
+    try {
+      const votes = await voteService.getHallVotes(req.user!.id);
+      res.json({ votes });
+    } catch (error: any) {
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
+    }
+  }
+
   async myVotes(req: AuthRequest, res: Response) {
     try {
       const userId = req.user!.id;
