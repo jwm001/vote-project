@@ -13,6 +13,7 @@ interface FormState {
   allowMultiple: boolean;
   participationMode: ParticipationMode;
   resultsPublicDuringVote: boolean;
+  listedInHall: boolean;
   endAt: string;
   durationValue: number;
   durationUnit: DurationUnit;
@@ -39,6 +40,7 @@ function createInitialForm(): FormState {
     allowMultiple: false,
     participationMode: 'OPEN_LINK',
     resultsPublicDuringVote: false,
+    listedInHall: false,
     endAt: toLocalInput(end),
     durationValue: 7,
     durationUnit: 'days',
@@ -201,6 +203,7 @@ export default function CreateVote() {
       };
       if (form.participationMode === 'OPEN_LINK') {
         payload.endAt = new Date(form.endAt).toISOString();
+        payload.listedInHall = form.listedInHall;
       } else {
         payload.durationMinutes = durationToMinutes(
           form.durationValue,
@@ -393,6 +396,24 @@ export default function CreateVote() {
                   时长从你手动开始投票时计算，最长 30 天。
                 </p>
               </div>
+            )}
+
+            {form.participationMode === 'OPEN_LINK' && (
+              <label className="cv-toggle">
+                <input
+                  type="checkbox"
+                  checked={form.listedInHall}
+                  onChange={event =>
+                    update('listedInHall', event.target.checked)
+                  }
+                />
+                <span>
+                  <strong>在投票大厅公开</strong>
+                  <span className="cv-toggle-note">
+                    所有已核验用户都能在大厅看到并参与；创建后不可更改。
+                  </span>
+                </span>
+              </label>
             )}
 
             <label className="cv-toggle">
