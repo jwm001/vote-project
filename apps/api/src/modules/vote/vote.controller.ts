@@ -17,7 +17,7 @@ export class VoteController {
         return res.status(403).json({ error: "Only approved users can create votes" });
       }
 
-      const { title, description, allowMultiple, participationMode, resultsPublicDuringVote, endAt, durationMinutes, options } = req.body;
+      const { title, description, allowMultiple, participationMode, resultsPublicDuringVote, listedInHall, endAt, durationMinutes, options } = req.body;
 
       if (!title || !participationMode || !options || !Array.isArray(options) || options.length === 0) {
         return res.status(400).json({ error: "Missing required fields" });
@@ -30,6 +30,7 @@ export class VoteController {
         allowMultiple: Boolean(allowMultiple),
         participationMode,
         resultsPublicDuringVote: resultsPublicDuringVote === undefined ? undefined : Boolean(resultsPublicDuringVote),
+        listedInHall: listedInHall === undefined ? undefined : Boolean(listedInHall),
         endAt: endAt === undefined ? undefined : new Date(endAt),
         durationMinutes: durationMinutes === undefined ? undefined : Number(durationMinutes),
         options,

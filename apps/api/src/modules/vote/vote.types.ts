@@ -14,6 +14,7 @@ export interface CreateVoteInput {
   allowMultiple: boolean;
   participationMode: ParticipationMode;
   resultsPublicDuringVote?: boolean;
+  listedInHall?: boolean;
   endAt?: Date;
   durationMinutes?: number;
   options: string[];

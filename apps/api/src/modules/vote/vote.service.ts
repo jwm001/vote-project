@@ -118,6 +118,11 @@ export class VoteService {
       throw new AppError("投票模式不正确", 400);
     }
 
+    const listedInHall = Boolean(input.listedInHall);
+    if (participationMode === "INVITE_ONLY" && listedInHall) {
+      throw new AppError("邀请制投票不能进入投票大厅", 400);
+    }
+
     const hasEndAt = input.endAt !== undefined;
     const hasDurationMinutes = input.durationMinutes !== undefined;
     if (hasEndAt && hasDurationMinutes) {
@@ -177,6 +182,7 @@ export class VoteService {
         allowMultiple: input.allowMultiple,
         participationMode: input.participationMode,
         resultsPublicDuringVote: input.resultsPublicDuringVote ?? false,
+        listedInHall,
         durationMinutes,
         startAt,
         endAt,

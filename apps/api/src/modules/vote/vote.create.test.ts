@@ -249,6 +249,51 @@ describe("VoteService.createVote", () => {
       })
     ).rejects.toMatchObject({ status: 400 });
   });
+
+  it("defaults listedInHall to false", async () => {
+    const creator = await makeUser("creator");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "OPEN_LINK",
+      allowMultiple: false,
+      endAt: new Date(Date.now() + 86_400_000),
+      options: ["A", "B"],
+    });
+
+    expect(vote.listedInHall).toBe(false);
+  });
+
+  it("stores listedInHall for an OPEN_LINK vote", async () => {
+    const creator = await makeUser("creator");
+    const vote = await voteService.createVote({
+      creatorId: creator.id,
+      title: "T",
+      participationMode: "OPEN_LINK",
+      allowMultiple: false,
+      listedInHall: true,
+      endAt: new Date(Date.now() + 86_400_000),
+      options: ["A", "B"],
+    });
+
+    const stored = await prisma.vote.findUniqueOrThrow({ where: { id: vote.id } });
+    expect(stored.listedInHall).toBe(true);
+  });
+
+  it("rejects an INVITE_ONLY vote that is listed in the hall", async () => {
+    const creator = await makeUser("creator");
+    await expect(
+      voteService.createVote({
+        creatorId: creator.id,
+        title: "T",
+        participationMode: "INVITE_ONLY",
+        allowMultiple: false,
+        durationMinutes: 60,
+        listedInHall: true,
+        options: ["A", "B"],
+      })
+    ).rejects.toMatchObject({ status: 400 });
+  });
 });
 
 describe("VoteService.updateVote", () => {

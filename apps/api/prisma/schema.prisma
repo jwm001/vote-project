@@ -34,6 +34,7 @@ model Vote {
   participationMode String @default("OPEN_LINK")
   durationMinutes Int?
   resultsPublicDuringVote Boolean @default(false)
+  listedInHall Boolean @default(false)
   startAt      DateTime
   endAt        DateTime
   auditHash    String?
