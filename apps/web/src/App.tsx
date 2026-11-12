@@ -15,6 +15,7 @@ import Register from "./pages/Register";
 import CreateVote from "./pages/CreateVote";
 import VoteDetail from "./pages/VoteDetail";
 import MyVotes from "./pages/MyVotes";
+import Hall from "./pages/Hall";
 import MyInvites from "./pages/MyInvites";
 import Account from "./pages/Account";
 import InviteLanding from "./pages/InviteLanding";
@@ -71,6 +72,11 @@ function Nav() {
           ☰
         </button>
         <div className={`nav-links${menuOpen ? " nav-links--open" : ""}`}>
+          {user && (
+            <Link to="/hall" className="nav-link" onClick={closeMenu}>
+              投票大厅
+            </Link>
+          )}
           <Link to="/my-votes" className="nav-link" onClick={closeMenu}>
             我的投票
           </Link>
@@ -135,6 +141,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/my-votes" element={<MyVotes />} />
+          <Route path="/hall" element={<Hall />} />
           <Route path="/my-invites" element={<MyInvites />} />
           <Route path="/invite/:token" element={<InviteLanding />} />
           <Route path="/create" element={<CreateVote />} />
