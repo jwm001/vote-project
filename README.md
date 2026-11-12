@@ -142,6 +142,18 @@ Web 运行在 http://localhost:5173
 > **数据库同步**：本仓库早期的 schema 是通过 `prisma db push` 直接同步的，`prisma/migrations` 历史并不完整。
 > 因此本地或新环境请使用 `cd apps/api && npx prisma db push` 同步 schema（`prisma migrate deploy` 目前不适用于这套历史）。
 
+### 本地测试账号
+
+当前开发库 `apps/api/prisma/dev.db` 中已创建以下账号，均通过实名核验（`APPROVED`），可直接登录 http://localhost:5173/login：
+
+| 用户名 | 密码 | 角色 |
+|---|---|---|
+| `superadmin` | `SuperAdmin@123456` | 管理员 |
+| `tester1` | `TestUser@123456` | 普通用户 |
+| `tester2` | `TestUser@123456` | 普通用户 |
+
+> 以上仅为本地开发测试账号，切勿用于生产环境；新环境没有预置这些账号。
+
 ## 测试
 
 ```bash
