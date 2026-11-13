@@ -182,9 +182,12 @@ npm run backfill:identity -w @vote-project/api
 | `IDENTITY_PROVIDER` | 二要素核验提供方：`mock` 或 `http` |
 | `MOCK_ID_NUMBERS` | `mock` 模式下允许通过的身份证号，逗号分隔 |
 | `IDENTITY_API_URL` / `IDENTITY_API_KEY` | `http` 模式下核验服务的地址与密钥 |
+| `CORS_ORIGIN` | 允许的跨域来源，逗号分隔；同域部署不需要设置 |
 
 > `ID_HASH_SECRET` 一旦用于生产环境就不要再更换，否则历史用户的 `idNumberHash` 将无法与新注册用户去重。
 > 生产环境必须显式设置 `IDENTITY_PROVIDER`；未设置时后端拒绝启动，避免误用 mock 核验。
+
+生产部署（单台 VPS + 已有 Nginx + systemd，含备份、发布、回滚）见 [`docs/deploy-production.md`](docs/deploy-production.md)。
 
 ## 已知限制
 

@@ -47,6 +47,7 @@
 ## 入口与模块
 
 - `apps/api/src/index.ts` → `app.ts`；路由挂载：`/api`（审计 PDF）、`/api/auth`、`/api/admin`、`/api/votes`、`/api/invites`。
+- `app.ts` 开了 `app.set("trust proxy", 1)`（限流按 `req.ip`，依赖 Nginx 的 `X-Forwarded-For`）；默认不发 CORS 头，确实需要跨域才设 `CORS_ORIGIN`（逗号分隔）。生产部署见 `docs/deploy-production.md`。
 - `modules/vote/` 同时负责阶段、邀请、提交、结果/名单；没有独立的 `ballot` 模块。
 - 改路由时保留 `/my/*` 在 `/:id` 之前（`vote.routes.ts` 有注释）。
 - Web 路由集中在 `apps/web/src/App.tsx`，API 调用封装在 `apps/web/src/api.ts`。
