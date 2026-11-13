@@ -12,7 +12,8 @@ router.post("/", authMiddleware, verifiedMiddleware, voteController.create.bind(
 
 // My invitations must stay above "/:id".
 router.get("/my/votes", authMiddleware, voteController.myVotes.bind(voteController));
-router.get("/my/invites", authMiddleware, inviteController.myInvites.bind(inviteController));router.post(
+router.get("/my/invites", authMiddleware, inviteController.myInvites.bind(inviteController));
+router.post(
   "/my/invites/:inviteId/accept",
   authMiddleware,
   verifiedMiddleware,

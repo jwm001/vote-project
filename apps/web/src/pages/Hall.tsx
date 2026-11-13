@@ -146,7 +146,11 @@ export default function Hall() {
           <div className="hall-panel-icon">⚠️</div>
           <h2 className="hall-panel-title">加载失败</h2>
           <p className="hall-panel-text">{error}</p>
-          <button type="button" onClick={() => setReloadKey((key) => key + 1)}>
+          <button
+            type="button"
+            className="hall-cta"
+            onClick={() => setReloadKey((key) => key + 1)}
+          >
             重新加载
           </button>
         </div>
