@@ -89,6 +89,7 @@
 ## 全量记录 PDF
 
 - 投票成功后强制下载本场 PDF；也可在「我的投票」重新下载。
+- PDF 正文为中文，内置 Noto Sans SC（OFL）常规与粗体，导出时只嵌入本次用到的字形。
 - 进行中：非创建者/管理员下载的 PDF **隐藏选项和票数**，只保留序号、假名、提交时间、摘要。
 - 进行中：创建者/管理员可以下载完整版，便于主办方核对。
 - 结束后：PDF 为完整记录。
@@ -99,7 +100,7 @@
 - 摘要规则：
   - 进行中不封存摘要，PDF 标注为实时快照
   - 结束后首次导出：计算 SHA-256 写入 `Vote.auditHash` / `Vote.auditRecordedAt`
-  - 之后每次导出：重新计算并对比，PDF 标注 `MATCH` / `MISMATCH`
+  - 之后每次导出：重新计算并对比，PDF 标注「记录与封存摘要一致 / 不一致」
   - 摘要只用于发现「导出后被改动」，不等同于区块链式不可篡改
 
 ## 管理员
@@ -187,7 +188,6 @@ npm run backfill:identity -w @vote-project/api
 
 ## 已知限制
 
-- PDF 使用内置 Helvetica 字体，中文会渲染为 `?`；本版未引入中文字体子集。
 - `UserVoteHistory.ballotSequenceNumber` 与 `Ballot.sequenceNumber` 可在数据库层关联，见「匿名的边界」。
 - 模式 B 的小名单存在投票状态推断风险，见「名单可见性」。
 

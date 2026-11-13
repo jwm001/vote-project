@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import crypto from "crypto";
+import { PDFDocument } from "pdf-lib";
 import { auditService, shouldRedactOptions } from "./audit.service";
 import { VoteService } from "../vote/vote.service";
 import { AppError } from "../../utils/errors";
@@ -210,6 +211,30 @@ describe("Mode A PDF access", () => {
       auditService.generateAuditPdf(vote.id, viewerOf(stranger)),
       403
     );
+  });
+
+  it("embeds the Chinese fonts so CJK content renders", async () => {
+    const creator = await makeUser("creator");
+    const vote = await makeModeAVote(creator.id);
+
+    const result = await auditService.generateAuditPdf(
+      vote.id,
+      viewerOf(creator)
+    );
+    const loaded = await PDFDocument.load(result.pdf);
+    const objects = loaded.context
+      .enumerateIndirectObjects()
+      .map(([, object]) => object.toString());
+
+    // 两个中文字重都要真正嵌入（FontFile3 = CFF 子集），否则中文会变成空白/问号。
+    expect(
+      objects.some((text) => text.includes("/BaseFont /NotoSansSC-Regular"))
+    ).toBe(true);
+    expect(
+      objects.some((text) => text.includes("/BaseFont /NotoSansSC-Bold"))
+    ).toBe(true);
+    expect(objects.some((text) => text.includes("/FontFile3"))).toBe(true);
+    expect(objects.some((text) => text.includes("Helvetica"))).toBe(false);
   });
 
   it("allows any approved user after the vote ended and seals on first export", async () => {

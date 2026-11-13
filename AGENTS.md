@@ -8,6 +8,8 @@
 ## 技术栈与工作区
 
 - npm workspaces：`apps/api`（Express + TS + Prisma + SQLite，CommonJS），`apps/web`（React + Vite，ESM）。
+- `apps/api/assets/fonts/` 放 PDF 用的 Noto Sans SC（OFL，Regular + Bold，约 17MB）：`@pdf-lib/fontkit` 子集嵌入，路径从 `__dirname` 向上找 `assets/fonts`，dev 与 `dist` 都能解析，别删这两个文件。
+- pdf-lib 的 `subset: true` 才走 CFF 正确路径；不要改成 `subset: false`（会把 CFF 当 TrueType 嵌入，字形宽度出错）。新增 PDF 文案直接写中文即可。
 - `packages/shared` 目前没有任何代码引用，且 `main`/`types` 指向不存在的 `src/index.ts`；不要从这里 import。
 - `docs/superpowers/*/2025-*` 是历史产物（提到已删除的 multer / 照片审核），不要当作现状。
 
@@ -60,11 +62,10 @@
 - 模式 B：创建为 `DRAFT`；用户名邀请不过期，一人一链接 7 天 / 单次 / 可撤销且 token 只展示一次；`start` 后不能新增受邀人，已投票者不能移除；所有非 `REMOVED` 的已绑定受邀人投完自动结束（未接受的用户名邀请阻塞，未接受链接不阻塞）；创建者也要被邀请才能投。
 - 名单：A 进行中不可见（含创建者），结束后登录用户可见「已投票者 + 脱敏姓名」。B `DRAFT` 受邀者 / 创建者见完整名单与接受状态；`LIVE` 创建者 / 管理员见谁已投，其他受邀者只见人数；`ENDED` 受邀者 / 创建者 / 管理员见完整实名，但不标投票状态。
 - 结果：`resultsPublicDuringVote` 默认关且开始后不可改；不可见时只显示「已投 N / M」。模式 A 进行中仅创建者 / 管理员可见，结束后对 `APPROVED` 用户开放；模式 B 进行中仅创建者 / 管理员可见，结束后对本场受邀者 / 创建者 / 管理员开放。
-- PDF：提交后强制下载本场全量记录；进行中非创建者 / 管理员看到脱敏版；结束后首次导出写入 `Vote.auditHash`，之后标注 `MATCH` / `MISMATCH`。访问：创建者 / 管理员 / 本场参与者随时；模式 B 已接受受邀者在 `LIVE` / `ENDED` 可下；模式 A 结束后其他 `APPROVED` 用户可下；模式 B 非受邀者不可下。
+- PDF：提交后强制下载本场全量记录；进行中非创建者 / 管理员看到脱敏版；结束后首次导出写入 `Vote.auditHash`，之后标注中文的「与封存摘要一致 / 不一致」。访问：创建者 / 管理员 / 本场参与者随时；模式 B 已接受受邀者在 `LIVE` / `ENDED` 可下；模式 A 结束后其他 `APPROVED` 用户可下；模式 B 非受邀者不可下。
 - 实名：注册同步核验，失败不建号，服务不可用才建 `PENDING_VERIFICATION`（可 `POST /api/auth/reverify`）；只存 `idNumberHash` + 加密姓名，不恢复身份证号 / 照片存储或 `uploads/` 写入。
 
 ## 已知限制
 
-- PDF 使用 Helvetica，中文渲染为 `?`。
 - 模式 B 小名单存在投票状态推断风险。
 - `getVotePhase` 用 `>` 比较 `endAt`，正好相等时仍是 `LIVE`（1ms 边界）。

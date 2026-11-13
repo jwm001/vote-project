@@ -1,7 +1,10 @@
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
+import fontkit from "@pdf-lib/fontkit";
 import { prisma } from "../../utils/prisma";
 import { AppError } from "../../utils/errors";
-import { PDFDocument, PDFFont, PDFPage, StandardFonts } from "pdf-lib";
+import { PDFDocument, PDFFont, PDFPage } from "pdf-lib";
 import { getVotePhase } from "../vote/vote.phase";
 
 type AuditRequester = {
@@ -88,7 +91,133 @@ function sha256(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex");
 }
 
-const clean = (text: string) => String(text).replace(/[^\x20-\x7E]/g, "?");
+// 只清掉 PDF 无法绘制的控制字符，其余（中文、全角标点）原样保留。
+const sanitize = (text: string) =>
+  String(text).replace(/[\u0000-\u001f\u007f]/g, " ");
+
+type PdfFonts = { regular: Buffer; bold: Buffer };
+
+let fontCache: Promise<PdfFonts> | undefined;
+
+/**
+ * 字体文件放在 apps/api/assets/fonts（tsc 不会把它复制进 dist），
+ * 所以从当前文件向上找包含该目录的包根目录，dev 与 dist 都能解析。
+ */
+function resolveFontPath(file: string): string {
+  let dir = __dirname;
+  for (let depth = 0; depth < 6; depth += 1) {
+    const candidate = path.join(dir, "assets", "fonts", file);
+    if (fs.existsSync(candidate)) return candidate;
+    dir = path.dirname(dir);
+  }
+  throw new Error(`PDF 字体缺失：assets/fonts/${file}`);
+}
+
+function loadFonts(): Promise<PdfFonts> {
+  if (!fontCache) {
+    fontCache = Promise.all([
+      fs.promises.readFile(resolveFontPath("NotoSansSC-Regular.otf")),
+      fs.promises.readFile(resolveFontPath("NotoSansSC-Bold.otf")),
+    ]).then(([regular, bold]) => ({ regular, bold }));
+    fontCache.catch(() => {
+      fontCache = undefined;
+    });
+  }
+  return fontCache;
+}
+
+const WORD_CHAR = /[A-Za-z0-9_\-.,:/@%#=+()\[\]<>"']/;
+const NO_LINE_START = new Set([
+  "。", "，", "、", "；", "：", "）", "】", "」", "』", "！", "？", "…",
+  ",", ".", ")", "]", "}", ";", "%",
+]);
+const NO_LINE_END = new Set(["（", "【", "「", "『", "《", "(", "[", "{"]);
+
+/** 中文逐字、英文/数字/ID 按词切分，避免把一串英文从中间断开。 */
+function tokenize(text: string): string[] {
+  const tokens: string[] = [];
+  let word = "";
+  for (const char of text) {
+    if (WORD_CHAR.test(char)) {
+      word += char;
+      continue;
+    }
+    if (word) {
+      tokens.push(word);
+      word = "";
+    }
+    tokens.push(char);
+  }
+  if (word) tokens.push(word);
+  return tokens;
+}
+
+function wrapText(
+  text: string,
+  font: PDFFont,
+  size: number,
+  maxWidth: number
+): string[] {
+  const lines: string[] = [];
+  const limit = Math.max(maxWidth, 40);
+  const fits = (candidate: string) =>
+    font.widthOfTextAtSize(candidate, size) <= limit;
+
+  for (const paragraph of String(text).split("\n")) {
+    const tokens = tokenize(sanitize(paragraph));
+    let line = "";
+    const pushLine = () => {
+      lines.push(line.replace(/\s+$/, ""));
+      line = "";
+    };
+
+    for (const token of tokens) {
+      if (!line && token === " ") continue;
+      const candidate = line + token;
+
+      if (fits(candidate)) {
+        line = candidate;
+        continue;
+      }
+
+      // 单个 token 本身就超宽（很长的英文串）：逐字符硬切
+      if (!line) {
+        let buffer = "";
+        for (const char of token) {
+          if (buffer && !fits(buffer + char)) {
+            lines.push(buffer);
+            buffer = "";
+          }
+          buffer += char;
+        }
+        line = buffer;
+        continue;
+      }
+
+      // 标点不放行首：允许轻微溢出，比出现孤零零的「，」好看
+      if (NO_LINE_START.has(token)) {
+        line = candidate;
+        continue;
+      }
+
+      // 左括号不放行尾：把括号挪到下一行开头
+      if (NO_LINE_END.has(line.slice(-1))) {
+        const tail = line.slice(-1);
+        line = line.slice(0, -1);
+        pushLine();
+        line = tail + token;
+        continue;
+      }
+
+      pushLine();
+      line = token === " " ? "" : token;
+    }
+
+    if (line.trim()) lines.push(line.replace(/\s+$/, ""));
+  }
+
+  return lines.length > 0 ? lines : [""];
+}
 
 type AuditVoteSource = {
   creatorId: string;
@@ -261,10 +390,13 @@ async function renderPdf(input: {
     input;
 
   const pdfDoc = await PDFDocument.create();
-  const font: PDFFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const bold: PDFFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  pdfDoc.registerFontkit(fontkit);
+  const fonts = await loadFonts();
+  const font: PDFFont = await pdfDoc.embedFont(fonts.regular, { subset: true });
+  const bold: PDFFont = await pdfDoc.embedFont(fonts.bold, { subset: true });
 
   let page: PDFPage = pdfDoc.addPage();
+  const pageWidth = page.getSize().width;
   let y = page.getSize().height - PAGE_MARGIN;
 
   const newPage = () => {
@@ -274,33 +406,51 @@ async function renderPdf(input: {
 
   const write = (
     text: string,
-    options: { size?: number; bold?: boolean; gap?: number; x?: number } = {}
+    options: {
+      size?: number;
+      bold?: boolean;
+      gap?: number;
+      x?: number;
+      indent?: number;
+    } = {}
   ) => {
     const size = options.size ?? 10;
-    const gap = options.gap ?? size + 4;
-    if (y - gap < BOTTOM_MARGIN) newPage();
-    page.drawText(clean(text), {
-      x: options.x ?? PAGE_MARGIN,
-      y,
+    const gap = options.gap ?? size + 5;
+    const x = options.x ?? PAGE_MARGIN;
+    const indent = options.indent ?? 0;
+    const activeFont = options.bold ? bold : font;
+    const lines = wrapText(
+      text,
+      activeFont,
       size,
-      font: options.bold ? bold : font,
+      pageWidth - x - indent - PAGE_MARGIN
+    );
+
+    lines.forEach((line, index) => {
+      if (y - size < BOTTOM_MARGIN) newPage();
+      page.drawText(line, {
+        x: index === 0 ? x : x + indent,
+        y,
+        size,
+        font: activeFont,
+      });
+      y -= gap;
     });
-    y -= gap;
   };
 
-  write(`Vote Audit Export`, { size: 18, bold: true, gap: 24 });
-  write(`Vote: ${vote.title}`, { size: 12, bold: true });
-  write(`Vote ID: ${vote.id}`);
-  write(`Creator ID: ${vote.creatorId}`);
-  write(`Start (UTC): ${vote.startAt.toISOString()}`);
-  write(`End (UTC): ${vote.endAt.toISOString()}`);
-  write(`Mode: ${vote.allowMultiple ? "Multiple choice" : "Single choice"}`);
+  write(`投票审计记录`, { size: 18, bold: true, gap: 26 });
+  write(`投票主题：${vote.title}`, { size: 12, bold: true });
+  write(`投票 ID：${vote.id}`);
+  write(`创建者 ID：${vote.creatorId}`);
+  write(`开始时间（UTC）：${vote.startAt.toISOString()}`);
+  write(`结束时间（UTC）：${vote.endAt.toISOString()}`);
+  write(`投票方式：${vote.allowMultiple ? "多选" : "单选"}`);
   y -= 6;
 
   if (redacted) {
-    write(`Options: hidden until the vote ends`, { size: 12, bold: true, gap: 16 });
+    write(`选项：投票结束前不展示`, { size: 12, bold: true, gap: 18 });
   } else {
-    write(`Options`, { size: 12, bold: true, gap: 16 });
+    write(`选项`, { size: 12, bold: true, gap: 18 });
     for (const option of [...vote.options].sort((a, b) => a.order - b.order)) {
       write(`  ${option.order + 1}. ${option.text}`);
     }
@@ -316,68 +466,70 @@ async function renderPdf(input: {
       }
     }
 
-    write(`Summary`, { size: 12, bold: true, gap: 16 });
-    write(`Total ballots: ${ballots.length}`);
+    write(`统计汇总`, { size: 12, bold: true, gap: 18 });
+    write(`总票数：${ballots.length}`);
     for (const option of [...vote.options].sort((a, b) => a.order - b.order)) {
-      write(`  ${option.text}: ${optionCounts.get(option.id) ?? 0}`);
+      write(`  ${option.text}：${optionCounts.get(option.id) ?? 0}`);
     }
     y -= 6;
   }
 
-  write(`Integrity`, { size: 12, bold: true, gap: 16 });
+  write(`完整性校验`, { size: 12, bold: true, gap: 18 });
   const integrityLabel: Record<Integrity, string> = {
-    live: "LIVE - vote still running, no sealed digest yet",
-    sealed: "SEALED - digest recorded on this export",
-    match: "MATCH - records unchanged since the sealed digest",
-    mismatch: "MISMATCH - records changed since the sealed digest",
+    live: "进行中：投票尚未结束，暂无封存摘要",
+    sealed: "已封存：本次导出写入封存摘要",
+    match: "一致：记录与封存摘要相符",
+    mismatch: "不一致：记录已与封存摘要不符",
   };
-  write(`Status: ${integrityLabel[integrity]}`, {
+  write(`状态：${integrityLabel[integrity]}`, {
     size: 10,
     bold: integrity === "mismatch",
   });
-  write(`Content digest (SHA-256):`);
+  write(`内容摘要（SHA-256）：`);
   for (const chunk of chunkText(digest, 64)) {
     write(`  ${chunk}`, { x: PAGE_MARGIN + 10 });
   }
   if (recordedDigest && recordedDigest !== digest) {
-    write(`Sealed digest (SHA-256):`);
+    write(`封存摘要（SHA-256）：`);
     for (const chunk of chunkText(recordedDigest, 64)) {
       write(`  ${chunk}`, { x: PAGE_MARGIN + 10 });
     }
   }
   if (recordedAt) {
-    write(`Sealed at (UTC): ${recordedAt.toISOString()}`);
+    write(`封存时间（UTC）：${recordedAt.toISOString()}`);
   } else {
-    write(`Sealed at (UTC): not sealed yet`);
+    write(`封存时间（UTC）：尚未封存`);
   }
   y -= 6;
 
-  write(`Records (ordered by sequence number)`, { size: 12, bold: true, gap: 16 });
-  write(`Seq | Pseudonym | Submitted at (UTC) | Options`, { size: 9, bold: true, gap: 14 });
+  write(`投票记录（按序号排列）`, { size: 12, bold: true, gap: 18 });
+  write(`序号 | 匿名标识 | 提交时间（UTC） | 所选选项`, {
+    size: 9,
+    bold: true,
+    gap: 14,
+  });
 
   const optionText = new Map(vote.options.map((option) => [option.id, option.text]));
 
   for (const ballot of ballots) {
     const labels = redacted
-      ? "(hidden)"
+      ? "（已隐藏）"
       : parseOptionIds(ballot.optionIds)
           .map((id) => optionText.get(id) ?? id)
-          .join(", ");
+          .join("，");
     const line = `${ballot.sequenceNumber} | ${ballot.pseudonym} | ${ballot.submittedAt.toISOString()} | ${labels || "-"}`;
-    write(line.substring(0, 110), { size: 8, gap: 12 });
+    write(line, { size: 8, gap: 12, indent: 10 });
   }
 
   if (ballots.length === 0) {
-    write(`No ballots recorded.`, { size: 9 });
+    write(`暂无投票记录。`, { size: 9 });
   }
 
   // 页脚：页码 + 摘要前缀，方便核对打印件
   const pages = pdfDoc.getPages();
   pages.forEach((current, index) => {
     current.drawText(
-      clean(
-        `Page ${index + 1} / ${pages.length}  |  digest ${digest.slice(0, 16)}...`
-      ),
+      `第 ${index + 1} / ${pages.length} 页  |  摘要 ${digest.slice(0, 16)}...`,
       { x: PAGE_MARGIN, y: 30, size: 8, font }
     );
   });
