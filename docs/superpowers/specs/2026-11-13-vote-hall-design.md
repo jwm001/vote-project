@@ -66,7 +66,7 @@
 
 ### 6. 大厅卡片显示什么
 
-每张卡片：投票标题、创建者用户名、截止时间、已投人数、单选/多选、以及「已投」/「我创建的」标记。不显示选项内容、不显示结果分布、不显示任何投票者信息。
+每张卡片：投票标题、创建者填写的一句话简介（`description`，可选）、创建者用户名、截止时间、已投人数、单选/多选、以及「已投」/「我创建的」标记。不显示选项内容、不显示结果分布、不显示任何投票者信息。
 
 ### 7. 已投的投票仍然显示
 
@@ -91,7 +91,7 @@ listedInHall Boolean @default(false)
 ### 创建接口
 
 - `CreateVoteInput` 增加 `listedInHall?: boolean`，默认 `false`。
-- `vote.controller.ts` 的 `create` 从 `req.body` 读取并转成布尔值传入 service。
+- `vote.controller.ts` 的 `create` 从 `req.body` 读取并转成布尔值传入 service。只接受布尔值或 `"true"` / `"false"` 字符串，其它值返回 400（不用 `Boolean()`，避免 `Boolean("false") === true`）。
 - `vote.service.ts` 的 `createVote` 写入该字段，并按第 1 条校验邀请制。
 
 ### 大厅接口

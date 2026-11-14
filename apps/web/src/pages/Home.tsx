@@ -17,6 +17,9 @@ export default function Home() {
               <Link to="/create" className="home-action home-action--primary">
                 创建投票
               </Link>
+              <Link to="/hall" className="home-action">
+                投票大厅
+              </Link>
               <Link to="/my-votes" className="home-action">
                 我的投票
               </Link>

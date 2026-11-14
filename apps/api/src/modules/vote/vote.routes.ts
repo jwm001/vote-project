@@ -20,6 +20,9 @@ router.post(
   inviteController.acceptById.bind(inviteController)
 );
 
+// Hall must stay above "/:id" for the same reason as "/my/*".
+router.get("/hall", authMiddleware, verifiedMiddleware, voteController.hall.bind(voteController));
+
 router.post(
   "/:id/invites/usernames",
   authMiddleware,

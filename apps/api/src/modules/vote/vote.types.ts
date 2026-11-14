@@ -14,6 +14,7 @@ export interface CreateVoteInput {
   allowMultiple: boolean;
   participationMode: ParticipationMode;
   resultsPublicDuringVote?: boolean;
+  listedInHall?: boolean;
   endAt?: Date;
   durationMinutes?: number;
   options: string[];
@@ -53,3 +54,16 @@ export interface MyVoteParticipated extends MyVoteItemBase {
 }
 
 export type MyVoteItem = MyVoteCreated | MyVoteParticipated;
+
+export interface HallVoteItem {
+  voteId: string;
+  title: string;
+  description: string | null;
+  creatorUsername: string;
+  allowMultiple: boolean;
+  endAt: Date;
+  createdAt: Date;
+  votedCount: number;
+  hasVoted: boolean;
+  isCreator: boolean;
+}

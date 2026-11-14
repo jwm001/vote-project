@@ -1,7 +1,7 @@
 import { prisma } from "../../utils/prisma";
 import { AppError } from "../../utils/errors";
 import { ABSTAIN_TEXT, MAX_DURATION_MINUTES, MAX_OPTION_LENGTH, MAX_OPTIONS, MIN_DURATION_MINUTES } from "./vote.constants";
-import { CreateVoteInput, MyVoteItem, MyVoteCreated, MyVoteParticipated, ParticipationMode, UpdateVoteInput, VotePhase, VoteViewer } from "./vote.types";
+import { CreateVoteInput, HallVoteItem, MyVoteItem, MyVoteCreated, MyVoteParticipated, ParticipationMode, UpdateVoteInput, VotePhase, VoteViewer } from "./vote.types";
 import { getVotePhase } from "./vote.phase";
 
 function generatePseudonym() {
@@ -118,6 +118,11 @@ export class VoteService {
       throw new AppError("投票模式不正确", 400);
     }
 
+    const listedInHall = Boolean(input.listedInHall);
+    if (participationMode === "INVITE_ONLY" && listedInHall) {
+      throw new AppError("邀请制投票不能进入投票大厅", 400);
+    }
+
     const hasEndAt = input.endAt !== undefined;
     const hasDurationMinutes = input.durationMinutes !== undefined;
     if (hasEndAt && hasDurationMinutes) {
@@ -177,6 +182,7 @@ export class VoteService {
         allowMultiple: input.allowMultiple,
         participationMode: input.participationMode,
         resultsPublicDuringVote: input.resultsPublicDuringVote ?? false,
+        listedInHall,
         durationMinutes,
         startAt,
         endAt,
@@ -649,6 +655,74 @@ export class VoteService {
       submittedAt: ballot?.submittedAt,
       sequenceNumber: history.ballotSequenceNumber,
     };
+  }
+
+  async getHallVotes(viewerId: string): Promise<HallVoteItem[]> {
+    const now = new Date();
+    const candidates = await prisma.vote.findMany({
+      where: {
+        listedInHall: true,
+        participationMode: "OPEN_LINK",
+        closedAt: null,
+        endAt: { gt: now },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 200,
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        creatorId: true,
+        allowMultiple: true,
+        endAt: true,
+        createdAt: true,
+        closedAt: true,
+        participationMode: true,
+        startedAt: true,
+      },
+    });
+
+    // SQL 已经按同一组条件过滤；这里再用 getVotePhase 复核一次，让大厅和详情页共享
+    // 同一套 LIVE 判定（1ms 边界、closedAt、DRAFT 规则），避免两处定义漂移。
+    // 目前 SQL 条件更严，这层复核是防御性的，不会单独筛掉行。
+    const votes = candidates.filter((vote) => getVotePhase(vote, now) === "LIVE");
+    if (votes.length === 0) return [];
+
+    const ids = votes.map((vote) => vote.id);
+    const creatorIds = [...new Set(votes.map((vote) => vote.creatorId))];
+
+    const [creators, counts, histories] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: creatorIds } },
+        select: { id: true, username: true },
+      }),
+      prisma.ballot.groupBy({
+        by: ["voteId"],
+        where: { voteId: { in: ids } },
+        _count: { _all: true },
+      }),
+      prisma.userVoteHistory.findMany({
+        where: { userId: viewerId, voteId: { in: ids } },
+        select: { voteId: true },
+      }),
+    ]);
+
+    const usernameById = new Map(creators.map((user) => [user.id, user.username]));
+    const countByVote = new Map(counts.map((row) => [row.voteId, row._count._all]));
+    const votedIds = new Set(histories.map((history) => history.voteId));
+
+    return votes.map((vote) => ({
+      voteId: vote.id,
+      title: vote.title,
+      description: vote.description,
+      creatorUsername: usernameById.get(vote.creatorId) ?? "",
+      allowMultiple: vote.allowMultiple,
+      endAt: vote.endAt,
+      createdAt: vote.createdAt,
+      votedCount: countByVote.get(vote.id) ?? 0,
+      hasVoted: votedIds.has(vote.id),
+      isCreator: vote.creatorId === viewerId,
+    }));
   }
 
   async getMyVotes(userId: string): Promise<MyVoteItem[]> {

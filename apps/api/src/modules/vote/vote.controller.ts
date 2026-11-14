@@ -2,9 +2,21 @@ import { Response } from "express";
 import { VoteService } from "./vote.service";
 import { getResults, getRoster } from "./vote.results";
 import { AuthRequest } from "../../middleware/auth.middleware";
-import { messageOf, statusCodeOf } from "../../utils/errors";
+import { AppError, messageOf, statusCodeOf } from "../../utils/errors";
 
 const voteService = new VoteService();
+
+/**
+ * 可选布尔字段：只接受布尔值或 "true"/"false" 字符串，其它值直接 400。
+ * 不用 Boolean() 是因为 Boolean("false") === true，会把关闭的开关静默打开。
+ */
+function optionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new AppError(`${field} 必须是布尔值`, 400);
+}
 
 export class VoteController {
   async create(req: AuthRequest, res: Response) {
@@ -17,7 +29,7 @@ export class VoteController {
         return res.status(403).json({ error: "Only approved users can create votes" });
       }
 
-      const { title, description, allowMultiple, participationMode, resultsPublicDuringVote, endAt, durationMinutes, options } = req.body;
+      const { title, description, allowMultiple, participationMode, resultsPublicDuringVote, listedInHall, endAt, durationMinutes, options } = req.body;
 
       if (!title || !participationMode || !options || !Array.isArray(options) || options.length === 0) {
         return res.status(400).json({ error: "Missing required fields" });
@@ -29,7 +41,8 @@ export class VoteController {
         description,
         allowMultiple: Boolean(allowMultiple),
         participationMode,
-        resultsPublicDuringVote: resultsPublicDuringVote === undefined ? undefined : Boolean(resultsPublicDuringVote),
+        resultsPublicDuringVote: optionalBoolean(resultsPublicDuringVote, "resultsPublicDuringVote"),
+        listedInHall: optionalBoolean(listedInHall, "listedInHall"),
         endAt: endAt === undefined ? undefined : new Date(endAt),
         durationMinutes: durationMinutes === undefined ? undefined : Number(durationMinutes),
         options,
@@ -174,6 +187,15 @@ export class VoteController {
       const result = await voteService.hasUserVoted(userId, id);
       const history = result ? await voteService.getUserVoteHistory(userId, id) : null;
       res.json({ hasVoted: result, history });
+    } catch (error: any) {
+      res.status(statusCodeOf(error)).json({ error: messageOf(error) });
+    }
+  }
+
+  async hall(req: AuthRequest, res: Response) {
+    try {
+      const votes = await voteService.getHallVotes(req.user!.id);
+      res.json({ votes });
     } catch (error: any) {
       res.status(statusCodeOf(error)).json({ error: messageOf(error) });
     }
