@@ -2,9 +2,21 @@ import { Response } from "express";
 import { VoteService } from "./vote.service";
 import { getResults, getRoster } from "./vote.results";
 import { AuthRequest } from "../../middleware/auth.middleware";
-import { messageOf, statusCodeOf } from "../../utils/errors";
+import { AppError, messageOf, statusCodeOf } from "../../utils/errors";
 
 const voteService = new VoteService();
+
+/**
+ * 可选布尔字段：只接受布尔值或 "true"/"false" 字符串，其它值直接 400。
+ * 不用 Boolean() 是因为 Boolean("false") === true，会把关闭的开关静默打开。
+ */
+function optionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new AppError(`${field} 必须是布尔值`, 400);
+}
 
 export class VoteController {
   async create(req: AuthRequest, res: Response) {
@@ -29,8 +41,8 @@ export class VoteController {
         description,
         allowMultiple: Boolean(allowMultiple),
         participationMode,
-        resultsPublicDuringVote: resultsPublicDuringVote === undefined ? undefined : Boolean(resultsPublicDuringVote),
-        listedInHall: listedInHall === undefined ? undefined : Boolean(listedInHall),
+        resultsPublicDuringVote: optionalBoolean(resultsPublicDuringVote, "resultsPublicDuringVote"),
+        listedInHall: optionalBoolean(listedInHall, "listedInHall"),
         endAt: endAt === undefined ? undefined : new Date(endAt),
         durationMinutes: durationMinutes === undefined ? undefined : Number(durationMinutes),
         options,

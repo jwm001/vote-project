@@ -95,7 +95,6 @@ export interface HallVoteItem {
   description: string | null;
   creatorUsername: string;
   allowMultiple: boolean;
-  startAt: string;
   endAt: string;
   createdAt: string;
   votedCount: number;

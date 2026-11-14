@@ -35,17 +35,17 @@ async function makeHallVote(
     endAt: new Date(Date.now() + 86_400_000),
     options: ["A", "B"],
   });
-  if (options.createdAt || options.closedAt || options.endAt) {
-    return prisma.vote.update({
-      where: { id: vote.id },
-      data: {
-        ...(options.createdAt ? { createdAt: options.createdAt } : {}),
-        ...(options.closedAt ? { closedAt: options.closedAt } : {}),
-        ...(options.endAt ? { endAt: options.endAt } : {}),
-      },
-    });
+  if (options.createdAt === undefined && options.closedAt === undefined && options.endAt === undefined) {
+    return vote;
   }
-  return vote;
+  return prisma.vote.update({
+    where: { id: vote.id },
+    data: {
+      ...(options.createdAt !== undefined ? { createdAt: options.createdAt } : {}),
+      ...(options.closedAt !== undefined ? { closedAt: options.closedAt } : {}),
+      ...(options.endAt !== undefined ? { endAt: options.endAt } : {}),
+    },
+  });
 }
 
 beforeEach(async () => {
@@ -279,5 +279,55 @@ describe("GET /api/votes/hall", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("邀请制投票不能进入投票大厅");
+  });
+
+  it("rejects a non-boolean listedInHall with 400 instead of coercing it", async () => {
+    const creator = await makeUser("creator");
+
+    const res = await request(createApp())
+      .post("/api/votes")
+      .set("Authorization", `Bearer ${tokenFor(creator.id)}`)
+      .send({
+        title: "Bad flag",
+        participationMode: "OPEN_LINK",
+        allowMultiple: false,
+        listedInHall: "yes",
+        endAt: new Date(Date.now() + 86_400_000).toISOString(),
+        options: ["A", "B"],
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("listedInHall 必须是布尔值");
+  });
+
+  it("ignores listedInHall on PATCH so the hall switch cannot change after creation", async () => {
+    const creator = await makeUser("creator");
+    const listed = await makeHallVote(creator.id, { title: "Listed" });
+    const unlisted = await makeHallVote(creator.id, {
+      title: "Unlisted",
+      listedInHall: false,
+    });
+    const auth = `Bearer ${tokenFor(creator.id)}`;
+
+    const hide = await request(createApp())
+      .patch(`/api/votes/${listed.id}`)
+      .set("Authorization", auth)
+      .send({ listedInHall: false });
+    const show = await request(createApp())
+      .patch(`/api/votes/${unlisted.id}`)
+      .set("Authorization", auth)
+      .send({ listedInHall: true });
+
+    expect(hide.status).toBe(200);
+    expect(show.status).toBe(200);
+
+    const storedListed = await prisma.vote.findUniqueOrThrow({
+      where: { id: listed.id },
+    });
+    const storedUnlisted = await prisma.vote.findUniqueOrThrow({
+      where: { id: unlisted.id },
+    });
+    expect(storedListed.listedInHall).toBe(true);
+    expect(storedUnlisted.listedInHall).toBe(false);
   });
 });

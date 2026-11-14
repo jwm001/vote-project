@@ -674,7 +674,6 @@ export class VoteService {
         description: true,
         creatorId: true,
         allowMultiple: true,
-        startAt: true,
         endAt: true,
         createdAt: true,
         closedAt: true,
@@ -683,6 +682,9 @@ export class VoteService {
       },
     });
 
+    // SQL 已经按同一组条件过滤；这里再用 getVotePhase 复核一次，让大厅和详情页共享
+    // 同一套 LIVE 判定（1ms 边界、closedAt、DRAFT 规则），避免两处定义漂移。
+    // 目前 SQL 条件更严，这层复核是防御性的，不会单独筛掉行。
     const votes = candidates.filter((vote) => getVotePhase(vote, now) === "LIVE");
     if (votes.length === 0) return [];
 
@@ -715,7 +717,6 @@ export class VoteService {
       description: vote.description,
       creatorUsername: usernameById.get(vote.creatorId) ?? "",
       allowMultiple: vote.allowMultiple,
-      startAt: vote.startAt,
       endAt: vote.endAt,
       createdAt: vote.createdAt,
       votedCount: countByVote.get(vote.id) ?? 0,

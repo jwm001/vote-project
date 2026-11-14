@@ -483,35 +483,6 @@ describe("VoteService.updateVote", () => {
       voteService.updateVote(vote.id, creator.id, { endAt: new Date(Date.now() - 86_400_000) })
     ).rejects.toMatchObject({ status: 400 });
   });
-
-  it("ignores listedInHall so the hall switch cannot change after creation", async () => {
-    const creator = await makeUser("creator");
-    const listed = await voteService.createVote({
-      creatorId: creator.id,
-      title: "Listed",
-      participationMode: "OPEN_LINK",
-      allowMultiple: false,
-      listedInHall: true,
-      endAt: new Date(Date.now() + 86_400_000),
-      options: ["A", "B"],
-    });
-    const unlisted = await voteService.createVote({
-      creatorId: creator.id,
-      title: "Unlisted",
-      participationMode: "OPEN_LINK",
-      allowMultiple: false,
-      endAt: new Date(Date.now() + 86_400_000),
-      options: ["A", "B"],
-    });
-
-    await voteService.updateVote(listed.id, creator.id, { listedInHall: false } as any);
-    await voteService.updateVote(unlisted.id, creator.id, { listedInHall: true } as any);
-
-    const storedListed = await prisma.vote.findUniqueOrThrow({ where: { id: listed.id } });
-    const storedUnlisted = await prisma.vote.findUniqueOrThrow({ where: { id: unlisted.id } });
-    expect(storedListed.listedInHall).toBe(true);
-    expect(storedUnlisted.listedInHall).toBe(false);
-  });
 });
 
 describe("VoteService.deleteVote", () => {
